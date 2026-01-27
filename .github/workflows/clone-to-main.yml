@@ -98,9 +98,9 @@ jobs:
         
         | Repository | URL | Cloned As |
         |------------|-----|-----------|
-        | Device Tree | https://github.com/saroj-nokia/device_xiaomi_sapphire.git | `source/device_xiaomi_sapphire/` |
-        | Vendor Tree | https://github.com/saroj-nokia/vendor_xiaomi_sapphire.git | `source/vendor_xiaomi_sapphire/` |
-        | Kernel Source | https://github.com/saroj-nokia/device_xiaomi_sapphire-kernel.git | `source/kernel_xiaomi_sapphire/` |
+        | Device Tree | https://github.com/lycodump/android_device_xiaomi_sapphire.git | `source/device_xiaomi_sapphire/` |
+        | Vendor Tree | https://github.com/lycodump/android_vendor_xiaomi_sapphire.git | `source/vendor_xiaomi_sapphire/` |
+        | Kernel Source | https://github.com/lycodump/android_device_xiaomi_sapphire-kernel.git | `source/kernel_xiaomi_sapphire/` |
         | Aperture Camera | https://github.com/LineageOS/android_packages_apps_Aperture.git | `source/aperture_camera/` |
         
         ## Device Information
@@ -158,9 +158,9 @@ jobs:
             --title "Add Redmi Note 14G NFC (Sapphire) sources to source/ directory" \
             --body "This PR adds cloned Android sources for Redmi Note 14G NFC (sapphire) organized under the source/ directory:
             
-            - Device Tree from saroj-nokia → source/device_xiaomi_sapphire/
-            - Vendor Tree from saroj-nokia → source/vendor_xiaomi_sapphire/
-            - Kernel Source from saroj-nokia → source/kernel_xiaomi_sapphire/
+            - Device Tree from lycodump → source/device_xiaomi_sapphire/
+            - Vendor Tree from lycodump → source/vendor_xiaomi_sapphire/
+            - Kernel Source from lycodump → source/kernel_xiaomi_sapphire/
             - Aperture Camera from LineageOS → source/aperture_camera/
             
             All repositories are cloned directly into the source/ directory for better organization (no submodules)." \
