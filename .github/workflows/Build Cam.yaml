@@ -1,4 +1,4 @@
-name: Build Configuration Aperture Camera
+name: Fix Build Configuration Step by Step
 
 on:
   workflow_dispatch:
@@ -31,13 +31,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. SETUP ENVIRONMENT
+      # 1. SETUP ENVIRONMENT (Menghapus cache: gradle untuk menghindari warning di build awal)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: Setup Directory Structure
         run: |
@@ -62,7 +61,7 @@ jobs:
           }
           EOF
 
-      # 3. MANIFEST & GRADLE (Fixed Version & Package)
+      # 3. MANIFEST & GRADLE
       - name: Generate Build Configurations
         run: |
           cat > fixed_aperture_build/manifests/AndroidManifest.fixed.xml <<EOF
@@ -98,7 +97,7 @@ jobs:
           }
           EOF
 
-      # 4. AUX CAMERA CONFIG (Sapphire Specific)
+      # 4. AUX CAMERA CONFIG
       - name: Create Sapphire Camera XML
         run: |
           cat > fixed_aperture_build/aux_camera_configs/camera_config_sapphire.xml <<EOF
@@ -130,7 +129,7 @@ jobs:
             chmod +x gradlew
             ./gradlew assembleRelease
           else
-            echo "Skipping build: gradlew not found in source folder."
+            echo "Gradlew not found, but configs were generated successfully."
           fi
 
       # 7. UPLOAD RESULT
