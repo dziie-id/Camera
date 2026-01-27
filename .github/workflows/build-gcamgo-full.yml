@@ -53,12 +53,10 @@ jobs:
         run: |
           echo "Patch step skipped (to be implemented)"
 
-      - name: Rebuild APK (apktool with large heap)
-        env:
-          JAVA_TOOL_OPTIONS: "-Xmx6g"
+      - name: Rebuild APK (NUCLEAR OPTION)
         run: |
-          echo "Using Java opts: $JAVA_TOOL_OPTIONS"
-          apktool b gcamgo_mod --use-aapt2 -o gcamgo_unsigned.apk
+          java -Xmx6g -jar /usr/local/bin/apktool.jar \
+            b gcamgo_mod --use-aapt2 -o gcamgo_unsigned.apk
 
       - name: Zipalign APK
         run: |
