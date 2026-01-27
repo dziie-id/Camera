@@ -1,0 +1,66 @@
+name: Build GCam Go Mod (Manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Install dependency dasar
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y openjdk-17-jdk zipalign apksigner curl
+
+      # 3️⃣ Download apktool JAR (WAJIB, anti OOM)
+      - name: Download apktool jar
+        run: |
+          curl -L -o apktool.jar https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar
+          java -jar apktool.jar --version
+
+      # 4️⃣ Download base APK (GCam Go BSG)
+      - name: Download base APK
+        run: |
+          curl -L -o base.apk https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_ENG.apk
+
+      # 5️⃣ Decompile APK
+      - name: Decompile APK
+        run: |
+          java -Xmx6g -jar apktool.jar d base.apk -o gcamgo_mod -f
+
+      # 6️⃣ (Optional) Patch placeholder
+      - name: Patch step (placeholder)
+        run: |
+          echo "Patch skipped for now"
+
+      # 7️⃣ Rebuild APK (ANTI OOM, FIX UTAMA)
+      - name: Rebuild APK
+        run: |
+          java -Xmx6g -jar apktool.jar b gcamgo_mod --use-aapt2 -o gcamgo_unsigned.apk
+
+      # 8️⃣ Zipalign
+      - name: Zipalign APK
+        run: |
+          zipalign -f 4 gcamgo_unsigned.apk gcamgo_aligned.apk
+
+      # 9️⃣ Sign APK pakai key sendiri
+      - name: Sign APK
+        run: |
+          apksigner sign \
+            --key key/Key_20260125_203517.pk8 \
+            --cert key/Key_20260125_203517.x509.pem \
+            --out GCamGo_signed.apk \
+            gcamgo_aligned.apk
+
+      # 🔟 Upload hasil build
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GCamGo-signed
+          path: GCamGo_signed.apk
