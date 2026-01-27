@@ -25,7 +25,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # 2. SETUP STRUKTUR HASIL
+      # 2. SETUP STRUKTUR OUTPUT
       - name: Setup Output Folder
         run: |
           mkdir -p fixed_aperture_build/{aux_camera_configs,signing_configs,output}
@@ -45,44 +45,52 @@ jobs:
           </camera-config>
           EOF
 
-      # 4. GENERATE KEYSTORE (Hapus yang lama jika ada agar tidak error)
+      # 4. BYPASS/RESET KEYSTORE (Menghapus file lama jika ada)
       - name: Generate Keystore
         run: |
           KEYSTORE_FILE="fixed_aperture_build/signing_configs/release.keystore"
-          if [ -f "$KEYSTORE_FILE" ]; then rm "$KEYSTORE_FILE"; fi
+          
+          # Hapus file keystore jika sudah ada agar tidak terjadi error alias sudah ada
+          if [ -f "$KEYSTORE_FILE" ]; then
+            echo "Keystore ditemukan, menghapus untuk membuat ulang..."
+            rm -f "$KEYSTORE_FILE"
+          fi
           
           keytool -genkey -v -keystore "$KEYSTORE_FILE" \
             -alias aperture_key -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Aperture, OU=Dev, O=Standalone, L=Jakarta, ST=Jakarta, C=ID" \
             -storepass password123 -keypass password123
+          echo "✓ Keystore berhasil dibuat ulang tanpa error."
 
       # 5. BUILD APK DARI FOLDER SOURCE
       - name: Build Signed APK
         run: |
-          # Masuk ke folder source tempat gradlew berada
+          # Masuk ke folder source sesuai struktur repo Anda
           cd source
           
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
-            echo "✓ gradlew ditemukan di folder source. Memulai build..."
+            echo "✓ gradlew ditemukan. Memulai build..."
             
-            # Jalankan build
+            # Menjalankan build APK tipe Release
             ./gradlew assembleRelease
             
-            # Cari APK dan pindahkan ke folder output di root
+            # Pindahkan file APK ke folder output di root
             find . -name "*-release.apk" -exec cp {} ../fixed_aperture_build/output/aperture-sapphire-signed.apk \;
-            echo "✓ Build selesai dan APK dipindahkan."
+            echo "✓ Build sukses. APK tersedia di output."
           else
             echo "❌ ERROR: gradlew TIDAK ditemukan di folder source!"
-            ls -R # Menampilkan isi folder untuk debug jika gagal
+            ls -R source/ # Debugging untuk melihat struktur jika gagal
             exit 1
           fi
 
-      # 6. PUSH HASIL KE REPO
+      # 6. PUSH HASIL KE REPOSITORY
       - name: Push Results to Repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
           git add fixed_aperture_build/
-          git commit -m "Build: Signed APK & Configs for Sapphire [skip ci]" || echo "No changes"
+          # Commit hanya jika ada perubahan file
+          git commit -m "Build: Signed APK & Configs Sapphire [skip ci]" || echo "Tidak ada perubahan."
           git push origin main
