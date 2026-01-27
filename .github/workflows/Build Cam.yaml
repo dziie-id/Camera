@@ -25,26 +25,25 @@ on:
         type: string
 
 jobs:
-  setup_fixed_directory:
-    if: ${{ github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'setup' }}
+  build_process:
     runs-on: ubuntu-latest
     steps:
-      - name: Create fixed build directory
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. SETUP (Selalu dijalankan di awal agar folder tersedia)
+      - name: Setup Directory Structure
         run: |
           mkdir -p fixed_aperture_build/{configs,manifests,gradle_configs,proguard_configs,aux_camera_configs,signing_configs,assets,output}
-          echo "✓ Directory structure created"
+          echo "✓ Folder structure created"
 
-  create_manifest_file:
-    needs: setup_fixed_directory
-    if: ${{ always() && (github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'manifest') }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate Manifest
+      # 2. MANIFEST
+      - name: Create Manifest
+        if: ${{ github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'manifest' }}
         run: |
-          package_name="${{ github.event.inputs.package_name }}"
           cat > fixed_aperture_build/manifests/AndroidManifest.fixed.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="$package_name">
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${{ github.event.inputs.package_name }}">
             <uses-permission android:name="android.permission.CAMERA" />
             <uses-permission android:name="android.permission.RECORD_AUDIO" />
             <application android:label="Aperture Sapphire" android:theme="@style/Theme.Aperture">
@@ -53,20 +52,16 @@ jobs:
           </manifest>
           EOF
 
-  create_gradle_files:
-    needs: setup_fixed_directory
-    if: ${{ always() && (github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'gradle') }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate Gradle Config
+      # 3. GRADLE
+      - name: Create Gradle Config
+        if: ${{ github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'gradle' }}
         run: |
-          package_name="${{ github.event.inputs.package_name }}"
           cat > fixed_aperture_build/gradle_configs/build.gradle <<EOF
           android {
-              namespace '$package_name'
+              namespace '${{ github.event.inputs.package_name }}'
               compileSdk 34
               defaultConfig {
-                  applicationId "$package_name"
+                  applicationId "${{ github.event.inputs.package_name }}"
                   minSdk 29
                   targetSdk 34
                   buildConfigField "String", "DEVICE_CODENAME", '"sapphire"'
@@ -74,12 +69,18 @@ jobs:
           }
           EOF
 
-  create_camera_config:
-    needs: setup_fixed_directory
-    if: ${{ always() && (github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'aux_config') }}
-    runs-on: ubuntu-latest
-    steps:
+      # 4. PROGUARD
+      - name: Create ProGuard Config
+        if: ${{ github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'proguard' }}
+        run: |
+          cat > fixed_aperture_build/proguard_configs/proguard-rules.pro <<EOF
+          -keep class android.hardware.camera2.** { *; }
+          -keep class androidx.camera.** { *; }
+          EOF
+
+      # 5. AUX CAMERA CONFIG (Sapphire)
       - name: Create Sapphire Camera XML
+        if: ${{ github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'aux_config' }}
         run: |
           cat > fixed_aperture_build/aux_camera_configs/camera_config_sapphire.xml <<EOF
           <camera-config>
@@ -91,34 +92,18 @@ jobs:
           </camera-config>
           EOF
 
-  setup_signing:
-    needs: setup_fixed_directory
-    if: ${{ always() && (github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'signing') }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate Signing Script
+      # 6. SIGNING
+      - name: Setup Signing Script
+        if: ${{ github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'signing' }}
         run: |
           cat > fixed_aperture_build/signing_configs/generate_keystore.sh <<EOF
           #!/bin/bash
           keytool -genkey -v -keystore release.keystore -alias aperture -keyalg RSA -keysize 2048 -validity 10000
           EOF
           chmod +x fixed_aperture_build/signing_configs/generate_keystore.sh
-          echo "✓ Keystore generation script ready"
 
-  generate_summary:
-    needs: [setup_fixed_directory, create_manifest_file, create_gradle_files, create_camera_config, setup_signing]
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create Final Summary
-        run: |
-          cat > fixed_aperture_build/FIXED_BUILD_SUMMARY.md <<EOF
-          # Build Fix Summary
-          - Device: Redmi Note 13 4G (sapphire)
-          - Status: Configuration Ready
-          - Output: Check artifacts for files.
-          EOF
-      - name: Upload Results
+      # 7. UPLOAD RESULTS
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: sapphire-build-package
