@@ -60,7 +60,7 @@ jobs:
         if [ -d "source/vendor_xiaomi_sapphire" ]; then
           echo "Vendor Tree already exists in source/. Skipping..."
         else
-          git clone --depth=1 hhttps://github.com/lycodump/android_vendor_xiaomi_sapphire.git source/vendor_xiaomi_sapphire
+          git clone --depth=1 https://github.com/lycodump/android_vendor_xiaomi_sapphire.git source/vendor_xiaomi_sapphire
           rm -rf source/vendor_xiaomi_sapphire/.git
           echo "✓ Vendor Tree cloned to source/"
         fi
