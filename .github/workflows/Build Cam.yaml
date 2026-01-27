@@ -1,17 +1,8 @@
-name: Fix Build Configuration Step by Step
+name: Build Aperture Camera Signed
 
 on:
   workflow_dispatch:
     inputs:
-      step_to_run:
-        description: 'Langkah Build'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - 'all'
-          - 'setup'
-          - 'build_signed_apk'
       package_name:
         description: 'Package Name'
         required: true
@@ -27,19 +18,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. SETUP JDK (Penting untuk menjalankan Gradle)
+      # 1. SETUP JDK
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 2. SETUP STRUKTUR & AUX CONFIG (Mendukung Multi-Lensa Sapphire)
-      - name: Setup Structure & AUX Config
+      # 2. SETUP STRUKTUR HASIL
+      - name: Setup Output Folder
         run: |
-          mkdir -p fixed_aperture_build/{manifests,gradle_configs,proguard_configs,aux_camera_configs,signing_configs,output}
-          
-          # Konfigurasi agar semua lensa Redmi Note 13 4G terdeteksi
+          mkdir -p fixed_aperture_build/{aux_camera_configs,signing_configs,output}
+
+      # 3. GENERATE AUX CONFIG (Untuk Multi-Lensa Sapphire)
+      - name: Inject Sapphire AUX Config
+        run: |
           cat > fixed_aperture_build/aux_camera_configs/camera_config_sapphire.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <camera-config>
@@ -52,38 +45,44 @@ jobs:
           </camera-config>
           EOF
 
-      # 3. GENERATE KEYSTORE (Untuk APK Signed)
+      # 4. GENERATE KEYSTORE (Hapus yang lama jika ada agar tidak error)
       - name: Generate Keystore
         run: |
-          keytool -genkey -v -keystore fixed_aperture_build/signing_configs/release.keystore \
+          KEYSTORE_FILE="fixed_aperture_build/signing_configs/release.keystore"
+          if [ -f "$KEYSTORE_FILE" ]; then rm "$KEYSTORE_FILE"; fi
+          
+          keytool -genkey -v -keystore "$KEYSTORE_FILE" \
             -alias aperture_key -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Aperture, OU=Dev, O=Standalone, L=Jakarta, ST=Jakarta, C=ID" \
             -storepass password123 -keypass password123
 
-      # 4. PROSES BUILD APK (DIKOREKSI)
+      # 5. BUILD APK DARI FOLDER SOURCE
       - name: Build Signed APK
         run: |
-          # Periksa apakah gradlew ada, jika tidak ada tampilkan instruksi jelas
+          # Masuk ke folder source tempat gradlew berada
+          cd source
+          
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
-            echo "Gradlew ditemukan, memulai proses kompilasi..."
+            echo "✓ gradlew ditemukan di folder source. Memulai build..."
+            
+            # Jalankan build
             ./gradlew assembleRelease
             
-            # Cari dan pindahkan APK
-            find . -name "*-release.apk" -exec cp {} fixed_aperture_build/output/aperture-sapphire-signed.apk \;
-            echo "✓ Signed APK Created successfully."
+            # Cari APK dan pindahkan ke folder output di root
+            find . -name "*-release.apk" -exec cp {} ../fixed_aperture_build/output/aperture-sapphire-signed.apk \;
+            echo "✓ Build selesai dan APK dipindahkan."
           else
-            echo "❌ ERROR: File 'gradlew' tidak ditemukan di root repositori!"
-            echo "Pastikan Anda sudah mengunggah seluruh folder project Android, bukan hanya file YAML."
-            echo "Menghasilkan file konfigurasi saja sebagai cadangan..."
+            echo "❌ ERROR: gradlew TIDAK ditemukan di folder source!"
+            ls -R # Menampilkan isi folder untuk debug jika gagal
+            exit 1
           fi
 
-      # 5. AUTO-PUSH KE REPOSITORY
+      # 6. PUSH HASIL KE REPO
       - name: Push Results to Repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add fixed_aperture_build/
-          # Push hasil meskipun build APK gagal (agar file konfigurasi tetap masuk)
-          git commit -m "Build: Generate Configs and Signed APK for Sapphire" || echo "No changes to commit"
-          git push
+          git commit -m "Build: Signed APK & Configs for Sapphire [skip ci]" || echo "No changes"
+          git push origin main
