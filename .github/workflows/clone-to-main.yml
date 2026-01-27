@@ -6,7 +6,7 @@ on:
       branch_name:
         description: 'Branch name for the cloned content'
         required: true
-        default: 'sapphire-sources'
+        default: 'main'
         type: string
       cleanup_first:
         description: 'Delete existing folders first'
@@ -27,7 +27,16 @@ jobs:
       with:
         ref: main
         fetch-depth: 0
-    
+
+    - name: Create or switch to target branch
+      run: |
+        # Create or checkout the target branch
+        git checkout -b ${{ github.event.inputs.branch_name }} 2>/dev/null || git checkout ${{ github.event.inputs.branch_name }}
+        
+        if [ "${{ github.event.inputs.cleanup_first }}" = "true" ]; then
+          echo "Cleaning up existing directories..."
+          rm -rf device_xiaomi_sapphire vendor_xiaomi_sapphire kernel_xiaomi_sapphire aperture_camera
+        fi
     
     - name: Clone Device Tree
       run: |
