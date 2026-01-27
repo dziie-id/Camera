@@ -9,6 +9,7 @@ on:
         default: 'all'
         type: choice
         options:
+          - 'all'
           - 'setup'
           - 'manifest'
           - 'gradle'
@@ -25,6 +26,7 @@ on:
 
 jobs:
   setup_fixed_directory:
+    # Menggunakan github.event.inputs untuk mengambil data dari manual trigger
     if: ${{ github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'setup' }}
     runs-on: ubuntu-latest
     steps:
@@ -36,9 +38,6 @@ jobs:
       - name: Create fixed build directory
         run: |
           echo "=== SETUP FIXED BUILD DIRECTORY ==="
-          echo ""
-          mkdir -p fixed_aperture_build
-          echo "✓ Created fixed_aperture_build directory"
           mkdir -p fixed_aperture_build/configs
           mkdir -p fixed_aperture_build/manifests
           mkdir -p fixed_aperture_build/gradle_configs
@@ -47,17 +46,23 @@ jobs:
           mkdir -p fixed_aperture_build/signing_configs
           mkdir -p fixed_aperture_build/assets
           mkdir -p fixed_aperture_build/output
-          echo "✓ Created subdirectory structure"
+          
           if [ -f "source/aperture_camera/AndroidManifest.xml" ]; then
             cp source/aperture_camera/AndroidManifest.xml fixed_aperture_build/manifests/AndroidManifest.original.xml
-            echo "✓ Copied original AndroidManifest.xml"
           fi
-          echo ""
-          echo "Directory structure created:"
-          tree fixed_aperture_build || ls -la fixed_aperture_build/
+
       - name: Save setup summary
         run: |
           cat > fixed_aperture_build/SETUP_SUMMARY.md << 'EOF'
+# Fixed Build Configuration Setup
+Created: $(date)
+Original source: source/aperture_camera/
+Fixed directory: fixed_aperture_build/
+EOF
+
+  # Lanjutkan dengan job lainnya (create_manifest_file, dll) sesuai file asli Anda...
+  # Pastikan setiap job menggunakan:
+  # if: ${{ github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'NAMA_STEP' }}
 # Fixed Build Configuration Setup
 
 ## Directory Structure
