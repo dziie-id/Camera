@@ -1,4 +1,4 @@
-name: Build Aperture Sapphire - Android 16 QPR2
+name: Build Aperture Sapphire - Android 16 QPR2 Final v3
 
 on:
   workflow_dispatch:
@@ -29,13 +29,14 @@ jobs:
           rm -rf fixed_aperture_build/
           mkdir -p fixed_aperture_build/output
 
-      # 2. SETUP JDK 21
+      # 2. SETUP JDK 21 (FIXED: Matikan cache agar tidak error)
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: 'gradle'
+          # Cache dimatikan karena kita melakukan clone manual di step berikutnya
+          # cache: 'gradle' 
 
       # 3. FRESH CLONE SOURCE
       - name: Clone Aperture Source
@@ -77,7 +78,7 @@ jobs:
           </resources>
           EOF
 
-      # 6. GENERATE KEYSTORE (ANTI-DUPLICATE)
+      # 6. GENERATE KEYSTORE
       - name: Generate Keystore
         run: |
           mkdir -p fixed_aperture_build/signing_configs
@@ -117,11 +118,9 @@ jobs:
           body: |
             ## Aperture Camera Android 16 QPR2
             - **Version:** 16 (Code 36)
-            - **Experimental Features:** Enabled (Cek di Settings > Advanced)
+            - **Experimental Features:** Enabled
             - **Developer Menu:** Enabled
             - **AUX Modes:** Forced (0.6x Support)
-            
-            Optimized for Redmi Note 13 4G (Sapphire).
           files: fixed_aperture_build/output/Aperture-Sapphire-A16.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
