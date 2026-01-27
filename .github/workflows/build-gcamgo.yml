@@ -51,8 +51,8 @@ jobs:
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk)
           $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
-            --key keystore/camera.pk8 \
-            --cert keystore/camera.x509.pem \
+            --key keystore/key.pk8 \
+            --cert keystore/key.x509.pem \
             --out CameraWrapper-${{ github.event.inputs.package_name }}.apk \
             $APK
 
