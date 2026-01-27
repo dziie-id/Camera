@@ -49,7 +49,7 @@ jobs:
         if [ -d "source/device_xiaomi_sapphire" ]; then
           echo "Device Tree already exists in source/. Skipping..."
         else
-          git clone --depth=1 https://github.com/saroj-nokia/device_xiaomi_sapphire.git source/device_xiaomi_sapphire
+          git clone --depth=1 https://github.com/lycodump/android_device_xiaomi_sapphire.git source/device_xiaomi_sapphire
           rm -rf source/device_xiaomi_sapphire/.git
           echo "✓ Device Tree cloned to source/"
         fi
@@ -60,7 +60,7 @@ jobs:
         if [ -d "source/vendor_xiaomi_sapphire" ]; then
           echo "Vendor Tree already exists in source/. Skipping..."
         else
-          git clone --depth=1 https://github.com/saroj-nokia/vendor_xiaomi_sapphire.git source/vendor_xiaomi_sapphire
+          git clone --depth=1 hhttps://github.com/lycodump/android_vendor_xiaomi_sapphire.git source/vendor_xiaomi_sapphire
           rm -rf source/vendor_xiaomi_sapphire/.git
           echo "✓ Vendor Tree cloned to source/"
         fi
@@ -71,7 +71,7 @@ jobs:
         if [ -d "source/kernel_xiaomi_sapphire" ]; then
           echo "Kernel Source already exists in source/. Skipping..."
         else
-          git clone --depth=1 https://github.com/saroj-nokia/device_xiaomi_sapphire-kernel.git source/kernel_xiaomi_sapphire
+          git clone --depth=1 https://github.com/lycodump/android_device_xiaomi_sapphire-kernel.git source/kernel_xiaomi_sapphire
           rm -rf source/kernel_xiaomi_sapphire/.git
           echo "✓ Kernel Source cloned to source/"
         fi
