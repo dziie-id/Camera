@@ -164,4 +164,4 @@ jobs:
           echo "Pull request already exists"
         fi
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.PAT_TOKEN }}
