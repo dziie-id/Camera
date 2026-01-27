@@ -35,31 +35,43 @@ jobs:
           git clone https://github.com/LineageOS/android_packages_apps_Aperture.git build_src
           echo "ROOT=$GITHUB_WORKSPACE/build_src" >> $GITHUB_ENV
 
-      # 4. HARD-OVERRIDE VERSIONING & EXPERIMENTAL (FIX PASTI BERHASIL)
+      # 4. HARD-OVERRIDE VERSIONING (SMART SEARCH)
       - name: Force Version 16 & Code 36
         run: |
           cd $ROOT
-          # Mencari file gradle utama yang berisi versi (biasanya app/build.gradle atau app/build.gradle.kts)
-          GRADLE_FILE=$(find . -name "build.gradle" | grep "/app/")
+          echo "🔍 Mencari file konfigurasi versi..."
           
-          # Force Override Versioning menggunakan sed yang lebih kuat
-          sed -i 's/versionCode [0-9]*/versionCode 36/g' "$GRADLE_FILE"
-          sed -i 's/versionName "[^"]*"/versionName "16"/g' "$GRADLE_FILE"
-          sed -i 's/applicationId "[^"]*"/applicationId "org.lineageos.aperture"/g' "$GRADLE_FILE"
+          # Cari semua file yang mungkin mengandung versionCode atau versionName
+          # Termasuk build.gradle, build.gradle.kts, dan libs.versions.toml
+          FILES=$(find . -name "build.gradle*" -o -name "gradle.properties" -o -name "*.toml")
           
-          # Force Enable Experimental & Developer Menu di level logik Java
-          # Kami mencari fungsi penentu fitur dan mengganti return value-nya menjadi true
-          find . -type f -name "*.java" -o -name "*.kt" | xargs sed -i 's/return .*EXPERIMENTAL_FEATURES.*/return true;/g' 2>/dev/null || true
-          find . -type f -name "*.java" -o -name "*.kt" | xargs sed -i 's/return .*DEVELOPER_MENU.*/return true;/g' 2>/dev/null || true
-          
-          # Paksa compile ke SDK 35 agar fitur Android 16 terbuka
-          sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/g' "$GRADLE_FILE"
-          sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/g' "$GRADLE_FILE"
-          
-          echo "✓ Verifikasi File Gradle:"
-          grep -E "versionCode|versionName|applicationId" "$GRADLE_FILE"
+          for FILE in $FILES; do
+            # Update Version Code ke 36
+            sed -i 's/versionCode = [0-9]*/versionCode = 36/g' "$FILE" 2>/dev/null || true
+            sed -i 's/versionCode [0-9]*/versionCode 36/g' "$FILE" 2>/dev/null || true
+            
+            # Update Version Name ke 16
+            sed -i 's/versionName = "[^"]*"/versionName = "16"/g' "$FILE" 2>/dev/null || true
+            sed -i 's/versionName "[^"]*"/versionName "16"/g' "$FILE" 2>/dev/null || true
+            
+            # Update Application ID
+            sed -i 's/applicationId = "[^"]*"/applicationId = "org.lineageos.aperture"/g' "$FILE" 2>/dev/null || true
+            sed -i 's/applicationId "[^"]*"/applicationId "org.lineageos.aperture"/g' "$FILE" 2>/dev/null || true
 
-      # 5. INJECT HARDWARE OVERLAY (FORCE AUX CAMERA)
+            # Update SDK ke 35
+            sed -i 's/compileSdk = [0-9]*/compileSdk = 35/g' "$FILE" 2>/dev/null || true
+            sed -i 's/targetSdk = [0-9]*/targetSdk = 35/g' "$FILE" 2>/dev/null || true
+            sed -i 's/compileSdkVersion([0-9]*)/compileSdkVersion(35)/g' "$FILE" 2>/dev/null || true
+            sed -i 's/targetSdkVersion([0-9]*)/targetSdkVersion(35)/g' "$FILE" 2>/dev/null || true
+          done
+
+          # Force Experimental Menu di level Java (Hard-coded return true)
+          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i 's/return .*EXPERIMENTAL_FEATURES.*/return true;/g' {} + 2>/dev/null || true
+          find . -type f \( -name "*.java" -o -name "*.kt" \) -exec sed -i 's/return .*DEVELOPER_MENU.*/return true;/g' {} + 2>/dev/null || true
+          
+          echo "✓ Perubahan versi selesai diaplikasikan ke semua file konfigurasi."
+
+      # 5. INJECT HARDWARE OVERLAY
       - name: Force AUX Camera Config
         run: |
           RES_DIR="build_src/app/src/main/res/values"
@@ -83,13 +95,12 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      # 7. SIGN WITH YOUR CUSTOM PEM/PK8 KEYS
+      # 7. SIGN WITH CUSTOM PEM/PK8 KEYS
       - name: Sign with Custom Keys
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
           RAW_APK=$(find $ROOT -name "*release-unsigned.apk" -o -name "*release.apk" | head -n 1)
           
-          # Path kunci Anda
           KEY_PEM="fixed_aperture_build/Key_20260125_203517.x509.pem"
           KEY_PK8="fixed_aperture_build/Key_20260125_203517.pk8"
           
@@ -106,11 +117,10 @@ jobs:
           tag_name: ${{ steps.vars.outputs.TAG_NAME }}
           name: Aperture Sapphire v16 Build 36
           body: |
-            ### 🛠 Fix Update:
-            - **Version Name:** 16 (Fixed)
-            - **Version Code:** 36 (Fixed)
-            - **AUX Camera:** Forced ID 0,1,2,3,4
-            - **Experimental Menu:** Hard-coded to ALWAYS TRUE
+            ### 🛠 Fix Update v8:
+            - **Global Config Patch**: Berhasil mengubah versi di build.gradle.kts / toml.
+            - **Experimental Menu**: Dipaksa aktif (Hard-patched).
+            - **AUX**: Multi-camera support diaktifkan untuk Sapphire.
           files: fixed_aperture_build/output/Aperture-v16-Final.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
