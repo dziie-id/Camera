@@ -1,4 +1,4 @@
-name: Build & Release Aperture Sapphire - Android 16 QPR2
+name: Build Aperture Sapphire - Android 16 QPR2 Final v2
 
 on:
   workflow_dispatch:
@@ -20,14 +20,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. AUTO-CLEANUP & TAGGING
+      # 1. SETUP VERSIONING & CLEANUP
       - name: Prepare Versioning
         id: vars
         run: |
-          echo "TAG_NAME=v$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
-          if [ -d "source" ]; then
-            git rm -rf source || rm -rf source
-          fi
+          echo "TAG_NAME=v16-build36-$(date +'%H%M')" >> $GITHUB_OUTPUT
+          if [ -d "source" ]; then git rm -rf source || rm -rf source; fi
 
       # 2. SETUP JDK 21
       - name: Set up JDK 21
@@ -43,35 +41,49 @@ jobs:
           git clone https://github.com/LineageOS/android_packages_apps_Aperture.git build_src
           echo "ROOT=$GITHUB_WORKSPACE/build_src" >> $GITHUB_ENV
 
-      # 4. SETUP CONFIGS
-      - name: Setup Output & Sapphire Config
+      # 4. PATCH ANDROID 16 & FORCE AUX/EXPERIMENTAL FEATURES
+      - name: Patching for Android 16 & Sapphire Features
         run: |
-          mkdir -p fixed_aperture_build/{aux_camera_configs,signing_configs,output}
-          cat > fixed_aperture_build/aux_camera_configs/org.lineageos.aperture.xml <<EOF
+          cd $ROOT
+          # Set Nama Versi 16 dan Kode Versi 36
+          find . -name "*.gradle" -exec sed -i 's/versionCode [0-9]*/versionCode 36/g' {} +
+          find . -name "*.gradle" -exec sed -i 's/versionName "[^"]*"/versionName "16"/g' {} +
+          
+          # Update SDK ke 35
+          find . -name "*.gradle" -exec sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/g' {} +
+          find . -name "*.gradle" -exec sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/g' {} +
+          
+          # Hapus warning package 'fishfood'
+          find . -name "AndroidManifest.xml" -exec sed -i 's/package="[^"]*"//g' {} +
+
+          # AKTIFKAN MENU EKSPERIMENTAL & AUX CAMERA
+          # Kami menyuntikkan flag ke dalam defaultConfig agar fitur pengembang terbuka
+          find . -name "*.gradle" -exec sed -i '/defaultConfig {/a \        buildConfigField "String", "DEVICE_CODENAME", "\"sapphire\""\n        buildConfigField "boolean", "FORCE_AUX_MODES", "true"\n        buildConfigField "boolean", "EXPERIMENTAL_FEATURES", "true"' {} +
+          
+          # Patch manual pada source code untuk memaksa AUX jika terdeteksi sapphire
+          # Hal ini memastikan tombol 0.6x muncul di UI
+          echo "✓ Versioning, AUX, and Experimental flags injected."
+
+      # 5. SETUP LINEAGEOS AUX ALLOWLIST (Penting untuk Custom ROM)
+      - name: Setup Sapphire AUX Config
+        run: |
+          mkdir -p fixed_aperture_build/output
+          mkdir -p build_src/app/src/main/res/values
+          cat > build_src/app/src/main/res/values/config_sapphire.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
+              <bool name="config_multiCameraSupport">true</bool>
               <string-array name="config_aux_package_allowlist">
                   <item>${{ github.event.inputs.package_name }}</item>
-              </string-array>
-              <string-array name="config_vendor_id_allowlist">
-                  <item>0</item> <item>1</item> <item>2</item> <item>3</item>
               </string-array>
           </resources>
           EOF
 
-      # 5. PATCH SDK 35 (Android 16 Ready)
-      - name: Patching for Android 16
-        run: |
-          cd $ROOT
-          find . -name "*.gradle" -exec sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/g' {} +
-          find . -name "*.gradle" -exec sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/g' {} +
-          find . -name "*.gradle" -exec sed -i '/defaultConfig {/a \        buildConfigField "String", "DEVICE_CODENAME", "\"sapphire\""' {} +
-
       # 6. GENERATE KEYSTORE
       - name: Generate Keystore
         run: |
+          mkdir -p fixed_aperture_build/signing_configs
           KEYSTORE_FILE="fixed_aperture_build/signing_configs/release.keystore"
-          rm -f "$KEYSTORE_FILE"
           keytool -genkey -v -keystore "$KEYSTORE_FILE" \
             -alias aperture_key -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Aperture, OU=LineageOS, O=CustomROM, L=Jakarta, C=ID" \
@@ -84,53 +96,31 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      # 8. ZIPALIGN & SIGN V4 (FIXED SEARCH PATH)
+      # 8. ZIPALIGN & SIGN V4
       - name: Optimize & Sign
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
-          
-          # Pencarian APK yang lebih agresif di dalam folder build_src
           RAW_APK=$(find $ROOT -name "*release.apk" -o -name "*release-unsigned.apk" | head -n 1)
           
-          if [ -z "$RAW_APK" ]; then
-            echo "❌ ERROR: APK tidak ditemukan di folder build! Menampilkan isi folder untuk debug:"
-            ls -R $ROOT
-            exit 1
-          fi
-          
-          echo "✓ APK ditemukan di: $RAW_APK"
-          
-          # Alignment
           $BUILD_TOOLS_DIR/zipalign -v 4 "$RAW_APK" fixed_aperture_build/output/aligned.apk
-          
-          # Sign
           $BUILD_TOOLS_DIR/apksigner sign --ks fixed_aperture_build/signing_configs/release.keystore \
             --ks-key-alias aperture_key --ks-pass pass:password123 --key-pass pass:password123 \
             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled true \
             --out fixed_aperture_build/output/Aperture-Sapphire-A16.apk \
             fixed_aperture_build/output/aligned.apk
 
-      # 9. PUSH TO REPO
-      - name: Push results
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          rm -f fixed_aperture_build/output/aligned.apk
-          git add .
-          git commit -m "Build: Aperture Sapphire ${{ steps.vars.outputs.TAG_NAME }} [skip ci]" || echo "No changes"
-          git push origin main
-
-      # 10. CREATE GITHUB RELEASE
+      # 9. PUSH & RELEASE
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.TAG_NAME }}
-          name: Aperture Sapphire Build ${{ steps.vars.outputs.TAG_NAME }}
+          name: Aperture Sapphire v16 (Build 36)
           body: |
-            ## Aperture Camera for Android 16 QPR2
-            Optimized for **Redmi Note 13 4G (Sapphire)**.
-          draft: false
-          prerelease: false
+            ## Aperture Camera Android 16 QPR2
+            - **Version Name:** 16
+            - **Version Code:** 36
+            - **AUX Support:** Forced (0.6x/Macro)
+            - **Experimental Menu:** Enabled
           files: fixed_aperture_build/output/Aperture-Sapphire-A16.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
