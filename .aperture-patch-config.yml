@@ -1,0 +1,220 @@
+name: Generate Aperture Camera Patches
+
+on:
+  workflow_dispatch:
+    inputs:
+      camera_config:
+        description: 'Camera configuration (wide, ultrawide, macro, depth)'
+        required: true
+        default: 'wide,ultrawide,macro,depth,front'
+        type: string
+      enable_features:
+        description: 'Additional features to enable'
+        required: false
+        default: 'raw,portrait,night,pro'
+        type: string
+
+jobs:
+  generate-patches:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Generate camera configuration
+      run: |
+        echo "Generating camera configuration for Redmi Note 13 4G NFC..."
+        
+        # Parse input parameters
+        IFS=',' read -ra CAMERAS <<< "${{ github.event.inputs.camera_config }}"
+        IFS=',' read -ra FEATURES <<< "${{ github.event.inputs.enable_features }}"
+        
+        # Create camera configuration
+        CONFIG_DIR="camera_config"
+        mkdir -p $CONFIG_DIR
+        
+        # Generate camera XML configuration
+        cat > $CONFIG_DIR/camera_characteristics.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<characteristics>
+    <device model="sapphire" brand="Xiaomi">
+        <camera-config>
+EOF
+        
+        # Add each camera
+        CAMERA_ID=0
+        for camera in "${CAMERAS[@]}"; do
+          echo "Adding camera: $camera"
+          
+          case $camera in
+            "wide")
+              cat >> $CONFIG_DIR/camera_characteristics.xml << EOF
+            <camera id="$CAMERA_ID" facing="back" type="wide">
+                <sensor>
+                    <resolution width="1080" height="2400" />
+                    <pixel-size>0.8</pixel-size>
+                    <aperture>1.79</aperture>
+                    <focal-length>4.7mm</focal-length>
+                </sensor>
+                <capabilities>
+                    <capability name="autofocus" />
+                    <capability name="flash" />
+                    <capability name="ois" />
+                    <capability name="hdr" />
+                </capabilities>
+            </camera>
+EOF
+              ;;
+            "ultrawide")
+              cat >> $CONFIG_DIR/camera_characteristics.xml << EOF
+            <camera id="$CAMERA_ID" facing="back" type="ultrawide">
+                <sensor>
+                    <resolution width="800" height="600" />
+                    <pixel-size>1.0</pixel-size>
+                    <aperture>2.2</aperture>
+                    <focal-length>2.4mm</focal-length>
+                </sensor>
+                <capabilities>
+                    <capability name="fixed-focus" />
+                    <capability name="macro" />
+                </capabilities>
+            </camera>
+EOF
+              ;;
+            "macro")
+              cat >> $CONFIG_DIR/camera_characteristics.xml << EOF
+            <camera id="$CAMERA_ID" facing="back" type="macro">
+                <sensor>
+                    <resolution width="640" height="480" />
+                    <pixel-size>1.12</pixel-size>
+                    <aperture>2.4</aperture>
+                    <focal-length>1.5mm</focal-length>
+                </sensor>
+                <capabilities>
+                    <capability name="autofocus" />
+                    <capability name="macro-mode" />
+                </capabilities>
+            </camera>
+EOF
+              ;;
+            "depth")
+              cat >> $CONFIG_DIR/camera_characteristics.xml << EOF
+            <camera id="$CAMERA_ID" facing="back" type="depth">
+                <sensor>
+                    <resolution width="320" height="240" />
+                    <pixel-size>3.0</pixel-size>
+                </sensor>
+                <capabilities>
+                    <capability name="portrait" />
+                    <capability name="bokeh" />
+                    <capability name="3d-depth" />
+                </capabilities>
+            </camera>
+EOF
+              ;;
+            "front")
+              cat >> $CONFIG_DIR/camera_characteristics.xml << EOF
+            <camera id="$CAMERA_ID" facing="front" type="wide">
+                <sensor>
+                    <resolution width="1080" height="2400" />
+                    <pixel-size>0.8</pixel-size>
+                    <aperture>2.0</aperture>
+                    <focal-length>3.5mm</focal-length>
+                </sensor>
+                <capabilities>
+                    <capability name="fixed-focus" />
+                    <capability name="hdr" />
+                    <capability name="beauty" />
+                </capabilities>
+            </camera>
+EOF
+              ;;
+          esac
+          
+          CAMERA_ID=$((CAMERA_ID + 1))
+        done
+        
+        # Close camera config
+        cat >> $CONFIG_DIR/camera_characteristics.xml << 'EOF'
+        </camera-config>
+        
+        <features>
+EOF
+        
+        # Add features
+        for feature in "${FEATURES[@]}"; do
+          echo "Enabling feature: $feature"
+          echo "            <feature name=\"$feature\" />" >> $CONFIG_DIR/camera_characteristics.xml
+        done
+        
+        # Close XML
+        cat >> $CONFIG_DIR/camera_characteristics.xml << 'EOF'
+        </features>
+    </device>
+</characteristics>
+EOF
+        
+        echo "✅ Camera configuration generated"
+        
+        # Create build script
+        cat > $CONFIG_DIR/apply_patches.sh << 'EOF'
+#!/bin/bash
+
+echo "Applying Aperture Camera patches for Redmi Note 13 4G NFC"
+
+# Copy configuration files
+cp camera_characteristics.xml ../aperture_camera/res/xml/
+cp camera_aux_config.xml ../aperture_camera/res/xml/ 2>/dev/null || true
+
+# Patch AndroidManifest.xml if exists
+if [ -f "../aperture_camera/AndroidManifest.xml" ]; then
+    echo "Patching AndroidManifest.xml for AUX support..."
+    # Add camera permissions
+    sed -i '/android.permission.CAMERA/a\    <uses-permission android:name="android.permission.SYSTEM_CAMERA" />' ../aperture_camera/AndroidManifest.xml
+    sed -i '/android.hardware.camera.front/a\    <uses-feature android:name="android.hardware.camera.any" android:required="true" />' ../aperture_camera/AndroidManifest.xml
+fi
+
+echo "✅ Patches applied successfully"
+EOF
+        
+        chmod +x $CONFIG_DIR/apply_patches.sh
+        
+        # Create documentation
+        cat > $CONFIG_DIR/README.md << EOF
+# Aperture Camera Patches for Redmi Note 13 4G NFC
+
+## Configuration Details
+
+### Cameras Enabled:
+$(printf -- '- %s\n' "${CAMERAS[@]}")
+
+### Features Enabled:
+$(printf -- '- %s\n' "${FEATURES[@]}")
+
+## Usage
+
+1. Copy the XML files to Aperture Camera res/xml/ directory
+2. Run apply_patches.sh to apply changes
+3. Rebuild the APK
+
+## Device Information
+- **Model**: Redmi Note 13 4G NFC
+- **Codename**: sapphire
+- **ROM**: Project Infinity Android 16 QPR 2
+- **Base**: LineageOS
+
+## Notes
+- This configuration enables multiple camera (AUX) support
+- Requires Camera HAL3 in kernel
+- May need additional vendor camera blobs
+
+Generated on: $(date)
+EOF
+
+    - name: Upload patches
+      uses: actions/upload-artifact@v4
+      with:
+        name: camera-patches
+        path: camera_config/
+        retention-days: 30
