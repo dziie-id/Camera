@@ -1,4 +1,4 @@
-name: Build Aperture Sapphire - Android 16 QPR2 Final v2
+name: Build Aperture Sapphire - Android 16 QPR2
 
 on:
   workflow_dispatch:
@@ -20,12 +20,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. SETUP VERSIONING & CLEANUP
-      - name: Prepare Versioning
+      # 1. CLEANUP & VERSIONING
+      - name: Prepare Workspace
         id: vars
         run: |
-          echo "TAG_NAME=v16-build36-$(date +'%H%M')" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=v16-b36-$(date +'%H%M')" >> $GITHUB_OUTPUT
           if [ -d "source" ]; then git rm -rf source || rm -rf source; fi
+          rm -rf fixed_aperture_build/
+          mkdir -p fixed_aperture_build/output
 
       # 2. SETUP JDK 21
       - name: Set up JDK 21
@@ -41,7 +43,7 @@ jobs:
           git clone https://github.com/LineageOS/android_packages_apps_Aperture.git build_src
           echo "ROOT=$GITHUB_WORKSPACE/build_src" >> $GITHUB_ENV
 
-      # 4. PATCH ANDROID 16 & FORCE AUX/EXPERIMENTAL FEATURES
+      # 4. PATCH ANDROID 16 & EXPERIMENTAL MENU
       - name: Patching for Android 16 & Sapphire Features
         run: |
           cd $ROOT
@@ -56,18 +58,14 @@ jobs:
           # Hapus warning package 'fishfood'
           find . -name "AndroidManifest.xml" -exec sed -i 's/package="[^"]*"//g' {} +
 
-          # AKTIFKAN MENU EKSPERIMENTAL & AUX CAMERA
-          # Kami menyuntikkan flag ke dalam defaultConfig agar fitur pengembang terbuka
-          find . -name "*.gradle" -exec sed -i '/defaultConfig {/a \        buildConfigField "String", "DEVICE_CODENAME", "\"sapphire\""\n        buildConfigField "boolean", "FORCE_AUX_MODES", "true"\n        buildConfigField "boolean", "EXPERIMENTAL_FEATURES", "true"' {} +
+          # AKTIFKAN SEMUA MENU EKSPERIMENTAL & DEVELOPER
+          find . -name "*.gradle" -exec sed -i '/defaultConfig {/a \        buildConfigField "String", "DEVICE_CODENAME", "\"sapphire\""\n        buildConfigField "boolean", "FORCE_AUX_MODES", "true"\n        buildConfigField "boolean", "EXPERIMENTAL_FEATURES", "true"\n        buildConfigField "boolean", "DEVELOPER_MENU", "true"' {} +
           
-          # Patch manual pada source code untuk memaksa AUX jika terdeteksi sapphire
-          # Hal ini memastikan tombol 0.6x muncul di UI
-          echo "✓ Versioning, AUX, and Experimental flags injected."
+          echo "✓ Versioning (16/36) and All Experimental Flags Injected."
 
-      # 5. SETUP LINEAGEOS AUX ALLOWLIST (Penting untuk Custom ROM)
-      - name: Setup Sapphire AUX Config
+      # 5. SETUP RES FILES FOR MULTI-CAMERA
+      - name: Setup Multi-Camera Resources
         run: |
-          mkdir -p fixed_aperture_build/output
           mkdir -p build_src/app/src/main/res/values
           cat > build_src/app/src/main/res/values/config_sapphire.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
@@ -79,11 +77,12 @@ jobs:
           </resources>
           EOF
 
-      # 6. GENERATE KEYSTORE
+      # 6. GENERATE KEYSTORE (ANTI-DUPLICATE)
       - name: Generate Keystore
         run: |
           mkdir -p fixed_aperture_build/signing_configs
           KEYSTORE_FILE="fixed_aperture_build/signing_configs/release.keystore"
+          rm -f "$KEYSTORE_FILE"
           keytool -genkey -v -keystore "$KEYSTORE_FILE" \
             -alias aperture_key -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Aperture, OU=LineageOS, O=CustomROM, L=Jakarta, C=ID" \
@@ -117,10 +116,12 @@ jobs:
           name: Aperture Sapphire v16 (Build 36)
           body: |
             ## Aperture Camera Android 16 QPR2
-            - **Version Name:** 16
-            - **Version Code:** 36
-            - **AUX Support:** Forced (0.6x/Macro)
-            - **Experimental Menu:** Enabled
+            - **Version:** 16 (Code 36)
+            - **Experimental Features:** Enabled (Cek di Settings > Advanced)
+            - **Developer Menu:** Enabled
+            - **AUX Modes:** Forced (0.6x Support)
+            
+            Optimized for Redmi Note 13 4G (Sapphire).
           files: fixed_aperture_build/output/Aperture-Sapphire-A16.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
