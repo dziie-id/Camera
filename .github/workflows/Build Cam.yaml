@@ -27,30 +27,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 1. SETUP JDK (Penting untuk menjalankan Gradle)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
+      # 2. SETUP STRUKTUR & AUX CONFIG (Mendukung Multi-Lensa Sapphire)
       - name: Setup Structure & AUX Config
         run: |
           mkdir -p fixed_aperture_build/{manifests,gradle_configs,proguard_configs,aux_camera_configs,signing_configs,output}
           
-          # INJECT AUX CONFIG (PENTING UNTUK SEMUA LENSA)
+          # Konfigurasi agar semua lensa Redmi Note 13 4G terdeteksi
           cat > fixed_aperture_build/aux_camera_configs/camera_config_sapphire.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <camera-config>
             <sensors>
-              <sensor id="0" type="back" name="IMX582" />
-              <sensor id="1" type="front" name="OV13B10" />
-              <sensor id="2" type="aux" name="GC02M1" purpose="macro" />
-              <sensor id="3" type="aux" name="ULTRA_WIDE" />
+              <sensor id="0" type="back" name="Main" />
+              <sensor id="1" type="front" name="Front" />
+              <sensor id="2" type="aux" name="Macro" />
+              <sensor id="3" type="aux" name="UltraWide" />
             </sensors>
           </camera-config>
           EOF
-          echo "✓ AUX Camera Config for Sapphire ready"
 
+      # 3. GENERATE KEYSTORE (Untuk APK Signed)
       - name: Generate Keystore
         run: |
           keytool -genkey -v -keystore fixed_aperture_build/signing_configs/release.keystore \
@@ -58,23 +60,30 @@ jobs:
             -dname "CN=Aperture, OU=Dev, O=Standalone, L=Jakarta, ST=Jakarta, C=ID" \
             -storepass password123 -keypass password123
 
+      # 4. PROSES BUILD APK (DIKOREKSI)
       - name: Build Signed APK
         run: |
+          # Periksa apakah gradlew ada, jika tidak ada tampilkan instruksi jelas
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
-            # Proses kompilasi dan penyuntikan config ke dalam APK
+            echo "Gradlew ditemukan, memulai proses kompilasi..."
             ./gradlew assembleRelease
             
-            # Cari dan pindahkan APK yang sudah ditandatangani
+            # Cari dan pindahkan APK
             find . -name "*-release.apk" -exec cp {} fixed_aperture_build/output/aperture-sapphire-signed.apk \;
-            echo "✓ Signed APK Created with AUX support"
+            echo "✓ Signed APK Created successfully."
           else
-            echo "Gradlew not found, generating configs only."
+            echo "❌ ERROR: File 'gradlew' tidak ditemukan di root repositori!"
+            echo "Pastikan Anda sudah mengunggah seluruh folder project Android, bukan hanya file YAML."
+            echo "Menghasilkan file konfigurasi saja sebagai cadangan..."
           fi
 
-      - name: Push to Repository
+      # 5. AUTO-PUSH KE REPOSITORY
+      - name: Push Results to Repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add fixed_aperture_build/
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Build: Signed APK with Multi-Lens AUX support" && git push)
+          # Push hasil meskipun build APK gagal (agar file konfigurasi tetap masuk)
+          git commit -m "Build: Generate Configs and Signed APK for Sapphire" || echo "No changes to commit"
+          git push
