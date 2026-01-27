@@ -1,0 +1,80 @@
+name: Build & Sign GCam Go (MGCLite, Full)
+
+on:
+  workflow_dispatch:   # MANUAL ONLY
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      JAVA_OPTS: -Xmx4g   # 🔥 FIX OOM APKTOOL
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            apktool \
+            zipalign \
+            apksigner \
+            openjdk-17-jdk \
+            wget
+
+      - name: Show environment info
+        run: |
+          java -version
+          apktool --version
+          free -h
+
+      - name: Download base APK (MGCLite BSG)
+        run: |
+          wget -O GCamGo.apk \
+          https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_ENG.apk
+
+      - name: Verify files
+        run: |
+          echo "=== ROOT ==="
+          ls -lah
+          echo "=== KEY ==="
+          ls -lah key
+
+      - name: Decompile APK
+        run: |
+          apktool d GCamGo.apk -o gcamgo_mod
+
+      # ==========================
+      # PATCH AREA (NANTI ISI)
+      # ==========================
+      - name: Patch placeholder
+        run: |
+          echo "Patch step skipped (to be implemented)"
+
+      - name: Rebuild APK (apktool with large heap)
+        run: |
+          apktool b gcamgo_mod -o gcamgo_unsigned.apk
+
+      - name: Zipalign APK
+        run: |
+          zipalign -p 4 gcamgo_unsigned.apk gcamgo_aligned.apk
+
+      - name: Sign APK (pk8 + x509)
+        run: |
+          apksigner sign \
+            --key key/Key_20260125_203517.pk8 \
+            --cert key/Key_20260125_203517.x509.pem \
+            --out GCamGo_signed.apk \
+            gcamgo_aligned.apk
+
+      - name: Verify APK signature
+        run: |
+          apksigner verify --verbose GCamGo_signed.apk
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GCamGo-MGCLite-SIGNED
+          path: GCamGo_signed.apk
