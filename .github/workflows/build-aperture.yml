@@ -1,36 +1,44 @@
-name: Build Aperture Camera (Sapphiren)
+name: Build Aperture Camera APK
 
 on:
-  workflow_dispatch: # Trigger manual sesuai permintaan
+  workflow_dispatch: # Trigger manual dari tab Actions
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: recursive # Penting jika Aperture mengambil library dari submodule
 
-      - name: Set up JDK 21 # Android 16 QPR2 standar menggunakan Java 21
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
-          distribution: 'zulu'
+          distribution: 'temurin'
+          java-version: '21' # Android 16 memerlukan Java 21
           cache: 'gradle'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Grant Permission to Gradlew
+      - name: Install Android SDK Platform 36 (Android 16)
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Make Gradle Executable
         run: chmod +x gradlew
 
-      - name: Build APK (Release/Debug)
-        run: ./gradlew assembleDebug # Gunakan assembleRelease jika sudah ada keystore
+      - name: Build with Gradle
+        run: ./gradlew assembleRelease
+        env:
+          # Jika kamu punya signing key, masukkan di secret GitHub
+          # Jika tidak, ini akan menghasilkan unsigned APK
+          TERM: dumb
 
-      - name: Upload Artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Aperture-Sapphiren-Android16
-          path: app/build/outputs/apk/debug/*.apk
+          name: Aperture-Camera-Sapphiren
+          path: app/build/outputs/apk/release/*.apk
