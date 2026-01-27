@@ -84,12 +84,26 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      # 8. ZIPALIGN & SIGN V4
+      # 8. ZIPALIGN & SIGN V4 (FIXED SEARCH PATH)
       - name: Optimize & Sign
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
-          RAW_APK=$(find $ROOT -name "*-release.apk" | head -n 1)
+          
+          # Pencarian APK yang lebih agresif di dalam folder build_src
+          RAW_APK=$(find $ROOT -name "*release.apk" -o -name "*release-unsigned.apk" | head -n 1)
+          
+          if [ -z "$RAW_APK" ]; then
+            echo "❌ ERROR: APK tidak ditemukan di folder build! Menampilkan isi folder untuk debug:"
+            ls -R $ROOT
+            exit 1
+          fi
+          
+          echo "✓ APK ditemukan di: $RAW_APK"
+          
+          # Alignment
           $BUILD_TOOLS_DIR/zipalign -v 4 "$RAW_APK" fixed_aperture_build/output/aligned.apk
+          
+          # Sign
           $BUILD_TOOLS_DIR/apksigner sign --ks fixed_aperture_build/signing_configs/release.keystore \
             --ks-key-alias aperture_key --ks-pass pass:password123 --key-pass pass:password123 \
             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled true \
@@ -115,12 +129,6 @@ jobs:
           body: |
             ## Aperture Camera for Android 16 QPR2
             Optimized for **Redmi Note 13 4G (Sapphire)**.
-            
-            ### Changes:
-            - Build target: Android 16 (SDK 35)
-            - Signature: V1, V2, V3, V4 (Standard)
-            - Multi-lens: Enabled (Main, UW, Macro)
-            - Optimization: Zipaligned for better RAM management.
           draft: false
           prerelease: false
           files: fixed_aperture_build/output/Aperture-Sapphire-A16.apk
