@@ -9,7 +9,6 @@ on:
         required: true
         default: 'all'
         type: choice
-          - 'all'
         options:
           - 'setup'
           - 'manifest'
