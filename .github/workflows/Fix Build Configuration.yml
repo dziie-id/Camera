@@ -1,0 +1,498 @@
+name: Fix Build Configuration Step by Step
+
+on:
+  workflow_dispatch:
+    inputs:
+      step_to_run:
+        description: 'Select which step to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'setup'
+          - 'manifest'
+          - 'gradle'
+          - 'proguard'
+          - 'aux_config'
+          - 'signing'
+          - 'assets'
+          - 'summary'
+      package_name:
+        description: 'Package name for standalone APK'
+        required: true
+        default: 'com.lycodump.aperture.standalone'
+        type: string
+
+jobs:
+  setup-fixed-directory:
+    if: github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'setup'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        fetch-depth: 0
+    
+    - name: Create fixed build directory
+      run: |
+        echo "=== SETUP FIXED BUILD DIRECTORY ==="
+        echo ""
+        
+        # Create main fixed directory
+        mkdir -p fixed_aperture_build
+        echo "✓ Created fixed_aperture_build directory"
+        
+        # Create directory structure
+        mkdir -p fixed_aperture_build/configs
+        mkdir -p fixed_aperture_build/manifests
+        mkdir -p fixed_aperture_build/gradle_configs
+        mkdir -p fixed_aperture_build/proguard_configs
+        mkdir -p fixed_aperture_build/aux_camera_configs
+        mkdir -p fixed_aperture_build/signing_configs
+        mkdir -p fixed_aperture_build/assets
+        mkdir -p fixed_aperture_build/output
+        
+        echo "✓ Created subdirectory structure"
+        
+        # Copy original AndroidManifest.xml if exists
+        if [ -f "source/aperture_camera/AndroidManifest.xml" ]; then
+          cp source/aperture_camera/AndroidManifest.xml fixed_aperture_build/manifests/AndroidManifest.original.xml
+          echo "✓ Copied original AndroidManifest.xml"
+        fi
+        
+        echo ""
+        echo "Directory structure created:"
+        tree fixed_aperture_build || ls -la fixed_aperture_build/
+        
+    - name: Save setup summary
+      run: |
+        cat > fixed_aperture_build/SETUP_SUMMARY.md << 'EOF'
+        # Fixed Build Configuration Setup
+        
+        ## Directory Structure
+        - `configs/` - Build configuration files
+        - `manifests/` - AndroidManifest.xml files
+        - `gradle_configs/` - Gradle build files
+        - `proguard_configs/` - ProGuard/R8 configurations
+        - `aux_camera_configs/` - Aux camera feature configurations
+        - `signing_configs/` - APK signing configurations
+        - `assets/` - Resource and asset files
+        - `output/` - Generated output files
+        
+        ## Purpose
+        This directory contains fixed build configurations for Aperture Camera standalone APK
+        without modifying the original source code.
+        
+        Created: $(date)
+        Original source: source/aperture_camera/
+        Fixed directory: fixed_aperture_build/
+        EOF
+
+  fix-android-manifest:
+    needs: setup-fixed-directory
+    if: github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'manifest'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Fix AndroidManifest.xml permissions
+      run: |
+        echo "=== FIXING ANDROIDMANIFEST.XML PERMISSIONS ==="
+        echo ""
+        
+        # Create fixed AndroidManifest.xml
+        cat > fixed_aperture_build/manifests/AndroidManifest.fixed.xml << EOF
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="${{ github.event.inputs.package_name }}">
+
+    <!-- ========== CAMERA PERMISSIONS ========== -->
+    <!-- Required for Camera2 API -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    
+    <!-- Audio recording for video -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    
+    <!-- Location for GPS metadata -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    
+    <!-- Storage permissions (scoped storage) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="28" 
+        tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+    
+    <!-- For Android 13+ photo picker -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    
+    <!-- Optional vibration for camera feedback -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    
+    <!-- Network permissions for potential cloud features -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    
+    <!-- Wake lock to keep screen on -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- ========== HARDWARE FEATURE DECLARATIONS ========== -->
+    <!-- Main camera hardware (REQUIRED) -->
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
+    
+    <!-- Camera features (optional but recommended) -->
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.capability.manual_sensor" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.capability.manual_post_processing" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.capability.raw" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.level.full" android:required="false" />
+    
+    <!-- Multi-camera support for aux cameras -->
+    <uses-feature android:name="android.hardware.camera.concurrent" android:required="false" />
+    
+    <!-- Camera2 API extensions -->
+    <uses-feature android:name="android.hardware.camera.extensions" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.extensions.HDR" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.extensions.NIGHT" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.extensions.BOKEH" android:required="false" />
+    
+    <!-- Device features -->
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
+    <uses-feature android:name="android.hardware.screen.landscape" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.barometer" android:required="false" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    
+    <!-- Display features -->
+    <uses-feature android:name="android.hardware.faketouch" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.location.network" android:required="false" />
+
+    <!-- ========== APPLICATION CONFIGURATION ========== -->
+    <application
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Aperture"
+        android:requestLegacyExternalStorage="true"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+        tools:targetApi="31"
+        tools:ignore="GoogleAppIndexingWarning">
+        
+        <!-- Main Camera Activity -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:windowSoftInputMode="adjustNothing"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Aperture.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            
+            <!-- Camera capture intents -->
+            <intent-filter>
+                <action android:name="android.media.action.IMAGE_CAPTURE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            
+            <intent-filter>
+                <action android:name="android.media.action.VIDEO_CAPTURE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            
+            <!-- View camera files -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            
+            <!-- Camera shortcut -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+        
+        <!-- Camera Settings Activity -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/title_activity_settings"
+            android:theme="@style/Theme.Aperture.Settings" />
+        
+        <!-- Gallery Activity -->
+        <activity
+            android:name=".GalleryActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize"
+            android:theme="@style/Theme.Aperture.Transparent" />
+        
+        <!-- Camera Service (background processing) -->
+        <service
+            android:name=".camera.CameraService"
+            android:exported="false"
+            android:enabled="true"
+            android:isolatedProcess="false" />
+            
+        <!-- Camera Broadcast Receiver -->
+        <receiver
+            android:name=".camera.CameraBroadcastReceiver"
+            android:exported="false"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.hardware.action.NEW_PICTURE" />
+                <action android:name="android.hardware.action.NEW_VIDEO" />
+                <action android:name="android.intent.action.MEDIA_SCANNER_SCAN_FILE" />
+            </intent-filter>
+        </receiver>
+        
+        <!-- File Provider for Camera files -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="\${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+        
+        <!-- Camera metadata -->
+        <meta-data
+            android:name="com.android.camera"
+            android:value="true" />
+            
+        <!-- Supports picture-in-picture mode -->
+        <meta-data
+            android:name="android.app.picture_in_picture"
+            android:resource="@xml/picture_in_picture" />
+            
+        <!-- Camera extensions -->
+        <meta-data
+            android:name="androidx.camera.extensions"
+            android:value="HDR, NIGHT, FACE_RETOUCH, BOKEH, AUTO" />
+            
+        <!-- App compatibility -->
+        <meta-data
+            android:name="android.max_aspect"
+            android:value="2.1" />
+    </application>
+
+</manifest>
+EOF
+        
+        echo "✓ Created fixed AndroidManifest.xml"
+        echo ""
+        
+        # Create manifest validation
+        echo "=== MANIFEST VALIDATION SUMMARY ==="
+        echo ""
+        echo "Permissions added:"
+        echo "1. android.permission.CAMERA"
+        echo "2. android.permission.RECORD_AUDIO"
+        echo "3. android.permission.READ/WRITE_EXTERNAL_STORAGE"
+        echo "4. android.permission.ACCESS_FINE_LOCATION"
+        echo "5. android.permission.ACCESS_MEDIA_LOCATION"
+        echo "6. READ_MEDIA_IMAGES/VIDEO (Android 13+)"
+        echo ""
+        echo "Hardware features declared:"
+        echo "1. android.hardware.camera (required)"
+        echo "2. android.hardware.camera.autofocus (optional)"
+        echo "3. android.hardware.camera.flash (optional)"
+        echo "4. android.hardware.camera.any (optional)"
+        echo "5. Multi-camera support features"
+        echo ""
+        echo "Camera2 API features:"
+        echo "✓ Camera extensions declared"
+        echo "✓ File provider configured"
+        echo "✓ Intent filters for camera actions"
+        echo "✓ Network security config"
+        
+        cat > fixed_aperture_build/manifests/MANIFEST_SUMMARY.md << 'EOF'
+        # AndroidManifest.xml Fix Summary
+        
+        ## Fixed Issues:
+        1. ✅ Added Camera2 API permissions
+        2. ✅ Added hardware feature declarations
+        3. ✅ Added aux camera support features
+        4. ✅ Added scoped storage permissions
+        5. ✅ Added Android 13+ media permissions
+        6. ✅ Added camera extension metadata
+        7. ✅ Added network security configuration
+        8. ✅ Added intent filters for camera actions
+        
+        ## Key Features:
+        - No root/system permissions required
+        - Standard Camera2 API usage
+        - Multi-camera (aux) support
+        - Scoped storage compliant
+        - Android 13+ compatible
+        
+        ## Location:
+        Original: source/aperture_camera/AndroidManifest.xml
+        Fixed: fixed_aperture_build/manifests/AndroidManifest.fixed.xml
+        EOF
+
+  create-gradle-build:
+    needs: setup-fixed-directory
+    if: github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'gradle'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Create standalone build.gradle
+      run: |
+        echo "=== CREATING STANDALONE BUILD.GRADLE ==="
+        echo ""
+        
+        cat > fixed_aperture_build/gradle_configs/build.gradle << 'EOF'
+// ============================================
+// Standalone Aperture Camera APK Build Configuration
+// Auto-generated for Redmi Note 13 4G (sapphire)
+// NO ROOT / NO MODULES REQUIRED
+// ============================================
+
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'kotlin-kapt'
+    id 'kotlin-parcelize'
+    id 'androidx.navigation.safeargs.kotlin'
+}
+
+// Apply version plugin for auto-increment
+apply plugin: 'com.android.application'
+
+android {
+    namespace '${{ github.event.inputs.package_name }}'
+    compileSdk 34
+    
+    defaultConfig {
+        applicationId "${{ github.event.inputs.package_name }}"
+        minSdk 29  // Android 10 - Required for CameraX and aux camera support
+        targetSdk 34
+        versionCode 10000
+        versionName "1.0.0-standalone"
+        
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Camera2 API requirements
+        buildConfigField "boolean", "ENABLE_AUX_CAMERAS", "true"
+        buildConfigField "boolean", "ENABLE_CAMERA2_API", "true"
+        buildConfigField "int", "MAX_CAMERAS_SUPPORTED", "4"
+        buildConfigField "int", "DEFAULT_CAMERA_ID", "0"
+        
+        // Device-specific configurations for Redmi Note 13 4G
+        buildConfigField "String", "DEVICE_CODENAME", '"sapphire"'
+        buildConfigField "String", "DEVICE_MANUFACTURER", '"Xiaomi"'
+        buildConfigField "String", "DEVICE_MODEL", '"Redmi Note 13 4G"'
+        buildConfigField "String", "BUILD_TYPE", '"STANDALONE_APK"'
+        
+        // Vector drawable support
+        vectorDrawables {
+            useSupportLibrary true
+        }
+        
+        // MultiDex for large app
+        multiDexEnabled true
+        
+        // ABI filters for Redmi Note 13 4G
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+        }
+    }
+    
+    signingConfigs {
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+        
+        release {
+            // These should be configured in gradle.properties
+            storeFile file(System.getenv("RELEASE_STORE_FILE") ?: "release.keystore")
+            storePassword System.getenv("RELEASE_STORE_PASSWORD") ?: ""
+            keyAlias System.getenv("RELEASE_KEY_ALIAS") ?: ""
+            keyPassword System.getenv("RELEASE_KEY_PASSWORD") ?: ""
+        }
+    }
+    
+    buildTypes {
+        debug {
+            debuggable true
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
+            
+            buildConfigField "boolean", "LOG_DEBUG", "true"
+            buildConfigField "boolean", "ENABLE_CRASHLYTICS", "false"
+            buildConfigField "String", "BUILD_VARIANT", '"DEBUG"'
+        }
+        
+        release {
+            debuggable false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            
+            buildConfigField "boolean", "LOG_DEBUG", "false"
+            buildConfigField "boolean", "ENABLE_CRASHLYTICS", "true"
+            buildConfigField "String", "BUILD_VARIANT", '"RELEASE"'
+        }
+        
+        // Special build for aux camera testing
+        auxTest {
+            initWith debug
+            applicationIdSuffix ".auxtest"
+            versionNameSuffix "-aux-test"
+            
+            buildConfigField "boolean", "ENABLE_AUX_CAMERAS", "true"
+            buildConfigField "boolean", "FORCE_AUX_MODE", "true"
+            buildConfigField "String", "BUILD_VARIANT", '"AUX_TEST"'
+            
+            matchingFallbacks = ['debug']
+        }
+    }
+    
+    compileOptions {
+        // Java 11 for CameraX compatibility
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+        
+        // Enable core library desugaring for newer APIs
+        coreLibraryDesugarin
