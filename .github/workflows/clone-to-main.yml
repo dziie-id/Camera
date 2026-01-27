@@ -1,4 +1,4 @@
-name: Clone Directly to Repository
+name: Clone to Source Directory
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
         default: 'main'
         type: string
       cleanup_first:
-        description: 'Delete existing folders first'
+        description: 'Delete existing source directories first'
         required: false
         default: 'true'
         type: choice
@@ -18,7 +18,7 @@ on:
           - 'false'
 
 jobs:
-  clone-direct:
+  clone-to-source:
     runs-on: ubuntu-latest
     
     steps:
@@ -32,56 +32,61 @@ jobs:
       run: |
         # Create or checkout the target branch
         git checkout -b ${{ github.event.inputs.branch_name }} 2>/dev/null || git checkout ${{ github.event.inputs.branch_name }}
+    
+    - name: Create source directory
+      run: |
+        # Create source directory if it doesn't exist
+        mkdir -p source
         
         if [ "${{ github.event.inputs.cleanup_first }}" = "true" ]; then
-          echo "Cleaning up existing directories..."
-          rm -rf device_xiaomi_sapphire vendor_xiaomi_sapphire kernel_xiaomi_sapphire aperture_camera
+          echo "Cleaning up existing directories in source/..."
+          rm -rf source/device_xiaomi_sapphire source/vendor_xiaomi_sapphire source/kernel_xiaomi_sapphire source/aperture_camera
         fi
     
-    - name: Clone Device Tree
+    - name: Clone Device Tree to source directory
       run: |
-        echo "Cloning Device Tree..."
-        if [ -d "device_xiaomi_sapphire" ]; then
-          echo "Device Tree already exists. Skipping..."
+        echo "Cloning Device Tree to source/..."
+        if [ -d "source/device_xiaomi_sapphire" ]; then
+          echo "Device Tree already exists in source/. Skipping..."
         else
-          git clone --depth=1 https://github.com/saroj-nokia/device_xiaomi_sapphire.git
-          rm -rf device_xiaomi_sapphire/.git
-          echo "✓ Device Tree cloned"
+          git clone --depth=1 https://github.com/saroj-nokia/device_xiaomi_sapphire.git source/device_xiaomi_sapphire
+          rm -rf source/device_xiaomi_sapphire/.git
+          echo "✓ Device Tree cloned to source/"
         fi
     
-    - name: Clone Vendor Tree
+    - name: Clone Vendor Tree to source directory
       run: |
-        echo "Cloning Vendor Tree..."
-        if [ -d "vendor_xiaomi_sapphire" ]; then
-          echo "Vendor Tree already exists. Skipping..."
+        echo "Cloning Vendor Tree to source/..."
+        if [ -d "source/vendor_xiaomi_sapphire" ]; then
+          echo "Vendor Tree already exists in source/. Skipping..."
         else
-          git clone --depth=1 https://github.com/saroj-nokia/vendor_xiaomi_sapphire.git
-          rm -rf vendor_xiaomi_sapphire/.git
-          echo "✓ Vendor Tree cloned"
+          git clone --depth=1 https://github.com/saroj-nokia/vendor_xiaomi_sapphire.git source/vendor_xiaomi_sapphire
+          rm -rf source/vendor_xiaomi_sapphire/.git
+          echo "✓ Vendor Tree cloned to source/"
         fi
     
-    - name: Clone Kernel Source
+    - name: Clone Kernel Source to source directory
       run: |
-        echo "Cloning Kernel Source..."
-        if [ -d "kernel_xiaomi_sapphire" ]; then
-          echo "Kernel Source already exists. Skipping..."
+        echo "Cloning Kernel Source to source/..."
+        if [ -d "source/kernel_xiaomi_sapphire" ]; then
+          echo "Kernel Source already exists in source/. Skipping..."
         else
-          git clone --depth=1 https://github.com/saroj-nokia/device_xiaomi_sapphire-kernel.git kernel_xiaomi_sapphire
-          rm -rf kernel_xiaomi_sapphire/.git
-          echo "✓ Kernel Source cloned"
+          git clone --depth=1 https://github.com/saroj-nokia/device_xiaomi_sapphire-kernel.git source/kernel_xiaomi_sapphire
+          rm -rf source/kernel_xiaomi_sapphire/.git
+          echo "✓ Kernel Source cloned to source/"
         fi
     
-    - name: Clone Aperture Camera
+    - name: Clone Aperture Camera to source directory
       run: |
-        echo "Cloning Aperture Camera..."
-        if [ -d "aperture_camera" ]; then
-          echo "Aperture Camera already exists. Skipping..."
+        echo "Cloning Aperture Camera to source/..."
+        if [ -d "source/aperture_camera" ]; then
+          echo "Aperture Camera already exists in source/. Skipping..."
         else
-          git clone --depth=1 https://github.com/LineageOS/android_packages_apps_Aperture.git aperture_camera
-          rm -rf aperture_camera/.git
+          git clone --depth=1 https://github.com/LineageOS/android_packages_apps_Aperture.git source/aperture_camera
+          rm -rf source/aperture_camera/.git
           # Remove any .gitmodules files inside
-          find aperture_camera -name ".gitmodules" -delete
-          echo "✓ Aperture Camera cloned"
+          find source/aperture_camera -name ".gitmodules" -delete
+          echo "✓ Aperture Camera cloned to source/"
         fi
     
     - name: Create manifest file
@@ -89,24 +94,25 @@ jobs:
         cat > SOURCES_MANIFEST.md << 'EOF'
         # Android Sources for Redmi Note 14G NFC (Sapphire)
         
-        ## Cloned Repositories
+        ## Cloned Repositories (Located in `source/` directory)
         
         | Repository | URL | Cloned As |
         |------------|-----|-----------|
-        | Device Tree | https://github.com/saroj-nokia/device_xiaomi_sapphire.git | `device_xiaomi_sapphire/` |
-        | Vendor Tree | https://github.com/saroj-nokia/vendor_xiaomi_sapphire.git | `vendor_xiaomi_sapphire/` |
-        | Kernel Source | https://github.com/saroj-nokia/device_xiaomi_sapphire-kernel.git | `kernel_xiaomi_sapphire/` |
-        | Aperture Camera | https://github.com/LineageOS/android_packages_apps_Aperture.git | `aperture_camera/` |
+        | Device Tree | https://github.com/saroj-nokia/device_xiaomi_sapphire.git | `source/device_xiaomi_sapphire/` |
+        | Vendor Tree | https://github.com/saroj-nokia/vendor_xiaomi_sapphire.git | `source/vendor_xiaomi_sapphire/` |
+        | Kernel Source | https://github.com/saroj-nokia/device_xiaomi_sapphire-kernel.git | `source/kernel_xiaomi_sapphire/` |
+        | Aperture Camera | https://github.com/LineageOS/android_packages_apps_Aperture.git | `source/aperture_camera/` |
         
         ## Device Information
         - **Device**: Redmi Note 14G NFC
         - **Codename**: sapphire
         - **Cloned Date**: $(date)
+        - **Directory Structure**: All sources are organized under the `source/` directory
         
         ## Usage Notes
         - These are direct clones, not submodules
         - Git histories have been removed
-        - All files are directly in this repository
+        - All source files are located in the `source/` directory
         EOF
     
     - name: Commit changes
@@ -122,24 +128,24 @@ jobs:
         if git diff --cached --quiet; then
           echo "No changes to commit"
         else
-          git commit -m "feat: Add Redmi Note 14G NFC sources directly to repo
+          git commit -m "feat: Add Redmi Note 14G NFC sources to source/ directory
         
-        Added the following cloned repositories:
+        Added the following cloned repositories to the source/ directory:
         
-        1. Device Tree (sapphire)
-        2. Vendor Tree (sapphire)
-        3. Kernel Source (sapphire)
-        4. Aperture Camera app
+        1. Device Tree (sapphire) → source/device_xiaomi_sapphire/
+        2. Vendor Tree (sapphire) → source/vendor_xiaomi_sapphire/
+        3. Kernel Source (sapphire) → source/kernel_xiaomi_sapphire/
+        4. Aperture Camera app → source/aperture_camera/
         
         Cloned from original sources on $(date)
         
-        This is a direct copy, not a submodule reference."
+        All sources are organized under the source/ directory for better structure."
         fi
     
     - name: Push to repository
       run: |
         git push --set-upstream origin ${{ github.event.inputs.branch_name }}
-        echo "✅ Successfully pushed to branch: ${{ github.event.inputs.branch_name }}"
+        echo "✅ Successfully pushed cloned sources to source/ directory on branch: ${{ github.event.inputs.branch_name }}"
     
     - name: Create Pull Request (Optional)
       if: ${{ github.event.inputs.branch_name != 'main' }}
@@ -149,15 +155,15 @@ jobs:
         
         if [ "$PR_EXISTS" = "{}" ]; then
           gh pr create \
-            --title "Add Redmi Note 14G NFC (Sapphire) sources" \
-            --body "This PR adds cloned Android sources for Redmi Note 14G NFC (sapphire):
+            --title "Add Redmi Note 14G NFC (Sapphire) sources to source/ directory" \
+            --body "This PR adds cloned Android sources for Redmi Note 14G NFC (sapphire) organized under the source/ directory:
             
-            - Device Tree from saroj-nokia
-            - Vendor Tree from saroj-nokia
-            - Kernel Source from saroj-nokia
-            - Aperture Camera from LineageOS
+            - Device Tree from saroj-nokia → source/device_xiaomi_sapphire/
+            - Vendor Tree from saroj-nokia → source/vendor_xiaomi_sapphire/
+            - Kernel Source from saroj-nokia → source/kernel_xiaomi_sapphire/
+            - Aperture Camera from LineageOS → source/aperture_camera/
             
-            All repositories are cloned directly into this repo (no submodules)." \
+            All repositories are cloned directly into the source/ directory for better organization (no submodules)." \
             --base main \
             --head ${{ github.event.inputs.branch_name }}
         else
