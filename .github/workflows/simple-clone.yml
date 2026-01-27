@@ -1,0 +1,77 @@
+name: Simple Clone Sources
+
+on:
+  workflow_dispatch:
+
+jobs:
+  clone:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout current repo
+      uses: actions/checkout@v4
+    
+    - name: Clone all sources
+      run: |
+        # Function to clone and clean git history
+        clone_repo() {
+          local url=$1
+          local dir=$2
+          
+          echo "Cloning: $url"
+          git clone --depth=1 "$url" "$dir"
+          
+          # Remove git history to avoid submodule issues
+          rm -rf "$dir/.git"
+          
+          # Remove any .gitmodules files
+          find "$dir" -name ".gitmodules" -delete
+          
+          echo "✓ Cloned to: $dir"
+        }
+        
+        # Clone repositories
+        clone_repo "https://github.com/saroj-nokia/device_xiaomi_sapphire.git" "device_xiaomi_sapphire"
+        clone_repo "https://github.com/saroj-nokia/vendor_xiaomi_sapphire.git" "vendor_xiaomi_sapphire"
+        clone_repo "https://github.com/saroj-nokia/device_xiaomi_sapphire-kernel.git" "kernel_xiaomi_sapphire"
+        clone_repo "https://github.com/LineageOS/android_packages_apps_Aperture.git" "aperture_camera"
+        
+        # Create info file
+        cat > SOURCES_INFO.md << 'EOF'
+        # Source Information
+        
+        These directories contain cloned Android sources for Redmi Note 14G NFC.
+        
+        ## Source URLs:
+        1. Device Tree: https://github.com/saroj-nokia/device_xiaomi_sapphire.git
+        2. Vendor Tree: https://github.com/saroj-nokia/vendor_xiaomi_sapphire.git
+        3. Kernel Source: https://github.com/saroj-nokia/device_xiaomi_sapphire-kernel.git
+        4. Aperture Camera: https://github.com/LineageOS/android_packages_apps_Aperture.git
+        
+        Last updated: $(date)
+        EOF
+    
+    - name: Commit changes
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Check if there are changes
+        if git diff --quiet && git diff --staged --quiet; then
+          echo "No changes to commit"
+          exit 0
+        fi
+        
+        git add .
+        git commit -m "chore: Update cloned sources
+        
+        Updated source repositories for Redmi Note 14G NFC
+        
+        - Device Tree (sapphire)
+        - Vendor Tree (sapphire) 
+        - Kernel Source (sapphire)
+        - Aperture Camera app
+        
+        Date: $(date)"
+        
+        git push
