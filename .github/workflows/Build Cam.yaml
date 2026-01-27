@@ -1,4 +1,4 @@
-name: Build Aperture Sapphire - Android 16 QPR2 Ready
+name: Build & Release Aperture Sapphire - Android 16 QPR2
 
 on:
   workflow_dispatch:
@@ -18,9 +18,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Mengambil seluruh history untuk memastikan semua file ada
+          fetch-depth: 0
 
-      # 1. SETUP JDK 21
+      # 1. AUTO-CLEANUP & TAGGING
+      - name: Prepare Versioning
+        id: vars
+        run: |
+          echo "TAG_NAME=v$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
+          if [ -d "source" ]; then
+            git rm -rf source || rm -rf source
+          fi
+
+      # 2. SETUP JDK 21
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -28,7 +37,13 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 2. SETUP STRUKTUR OUTPUT & AUX CONFIG
+      # 3. FRESH CLONE SOURCE
+      - name: Clone Aperture Source
+        run: |
+          git clone https://github.com/LineageOS/android_packages_apps_Aperture.git build_src
+          echo "ROOT=$GITHUB_WORKSPACE/build_src" >> $GITHUB_ENV
+
+      # 4. SETUP CONFIGS
       - name: Setup Output & Sapphire Config
         run: |
           mkdir -p fixed_aperture_build/{aux_camera_configs,signing_configs,output}
@@ -44,37 +59,15 @@ jobs:
           </resources>
           EOF
 
-      # 3. IDENTIFIKASI PROJECT ROOT (DIPERBAIKI)
-      - name: Identify Project Root
-        id: project_info
+      # 5. PATCH SDK 35 (Android 16 Ready)
+      - name: Patching for Android 16
         run: |
-          echo "Searching for build.gradle..."
-          # Mencari build.gradle tanpa batasan maxdepth agar lebih akurat
-          # Mengabaikan folder hasil build kita sendiri
-          SEARCH_RESULT=$(find . -name "build.gradle" | grep -v "fixed_aperture_build" | head -n 1)
-          
-          if [ -z "$SEARCH_RESULT" ]; then
-            echo "❌ ERROR: build.gradle tidak ditemukan di mana pun!"
-            ls -R # List semua file untuk debugging
-            exit 1
-          fi
-          
-          REAL_ROOT=$(dirname "$SEARCH_RESULT")
-          echo "ROOT=$REAL_ROOT" >> $GITHUB_OUTPUT
-          echo "✓ Project ditemukan di: $REAL_ROOT"
-
-      # 4. PATCH ANDROID 16 & FIX SDK
-      - name: Patch for Android 16
-        run: |
-          cd "${{ steps.project_info.outputs.ROOT }}"
-          # Update SDK ke 35 (Android 16 Ready)
+          cd $ROOT
           find . -name "*.gradle" -exec sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/g' {} +
           find . -name "*.gradle" -exec sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/g' {} +
-          
-          # Force buildConfig dan ignore lint
-          find . -name "*.gradle" -exec sed -i '/android {/a \    buildFeatures { buildConfig true }\n    lintOptions { checkReleaseBuilds false; abortOnError false }' {} +
+          find . -name "*.gradle" -exec sed -i '/defaultConfig {/a \        buildConfigField "String", "DEVICE_CODENAME", "\"sapphire\""' {} +
 
-      # 5. GENERATE KEYSTORE
+      # 6. GENERATE KEYSTORE
       - name: Generate Keystore
         run: |
           KEYSTORE_FILE="fixed_aperture_build/signing_configs/release.keystore"
@@ -84,31 +77,18 @@ jobs:
             -dname "CN=Aperture, OU=LineageOS, O=CustomROM, L=Jakarta, C=ID" \
             -storepass password123 -keypass password123
 
-      # 6. INJECT GRADLE WRAPPER
-      - name: Inject Gradle
-        run: |
-          cd "${{ steps.project_info.outputs.ROOT }}"
-          # Menggunakan Gradle 8.10 (terbaru & stabil untuk JDK 21)
-          gradle wrapper --gradle-version 8.10
-          chmod +x gradlew
-
-      # 7. BUILD RELEASE APK
+      # 7. BUILD APK
       - name: Build APK
         run: |
-          cd "${{ steps.project_info.outputs.ROOT }}"
-          ./gradlew assembleRelease --stacktrace
+          cd $ROOT
+          chmod +x gradlew
+          ./gradlew assembleRelease
 
-      # 8. ZIPALIGN & SIGN V4 (Android 16 Standard)
+      # 8. ZIPALIGN & SIGN V4
       - name: Optimize & Sign
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
-          RAW_APK=$(find "${{ steps.project_info.outputs.ROOT }}" -name "*-release.apk" | head -n 1)
-          
-          if [ -z "$RAW_APK" ]; then
-            echo "❌ ERROR: APK tidak ditemukan setelah build!"
-            exit 1
-          fi
-          
+          RAW_APK=$(find $ROOT -name "*-release.apk" | head -n 1)
           $BUILD_TOOLS_DIR/zipalign -v 4 "$RAW_APK" fixed_aperture_build/output/aligned.apk
           $BUILD_TOOLS_DIR/apksigner sign --ks fixed_aperture_build/signing_configs/release.keystore \
             --ks-key-alias aperture_key --ks-pass pass:password123 --key-pass pass:password123 \
@@ -116,18 +96,33 @@ jobs:
             --out fixed_aperture_build/output/Aperture-Sapphire-A16.apk \
             fixed_aperture_build/output/aligned.apk
 
-      # 9. PUSH & ARTIFACT
-      - name: Push Results
+      # 9. PUSH TO REPO
+      - name: Push results
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           rm -f fixed_aperture_build/output/aligned.apk
           git add .
-          git commit -m "Build: Aperture for Android 16 [skip ci]" || echo "No changes"
+          git commit -m "Build: Aperture Sapphire ${{ steps.vars.outputs.TAG_NAME }} [skip ci]" || echo "No changes"
           git push origin main
-      
-      - name: Final Artifact
-        uses: actions/upload-artifact@v4
+
+      # 10. CREATE GITHUB RELEASE
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: Aperture-Sapphire-A16
-          path: fixed_aperture_build/output/Aperture-Sapphire-A16.apk
+          tag_name: ${{ steps.vars.outputs.TAG_NAME }}
+          name: Aperture Sapphire Build ${{ steps.vars.outputs.TAG_NAME }}
+          body: |
+            ## Aperture Camera for Android 16 QPR2
+            Optimized for **Redmi Note 13 4G (Sapphire)**.
+            
+            ### Changes:
+            - Build target: Android 16 (SDK 35)
+            - Signature: V1, V2, V3, V4 (Standard)
+            - Multi-lens: Enabled (Main, UW, Macro)
+            - Optimization: Zipaligned for better RAM management.
+          draft: false
+          prerelease: false
+          files: fixed_aperture_build/output/Aperture-Sapphire-A16.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
