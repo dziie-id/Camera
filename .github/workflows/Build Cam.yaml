@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       step_to_run:
-        description: 'Select which step to run'
+        description: 'Pilih langkah yang akan dijalankan'
         required: true
         default: 'all'
         type: choice
@@ -19,7 +19,7 @@ on:
           - 'assets'
           - 'summary'
       package_name:
-        description: 'Package name for standalone APK'
+        description: 'Package name untuk standalone APK'
         required: true
         default: 'com.aperture.standalone'
         type: string
@@ -27,43 +27,29 @@ on:
 jobs:
   build_process:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Memberikan izin agar bot bisa push ke repo Anda
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. SETUP ENVIRONMENT (Menghapus cache: gradle untuk menghindari warning di build awal)
+      # 1. SETUP JDK
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
+      # 2. CREATE STRUCTURE
       - name: Setup Directory Structure
         run: |
           mkdir -p fixed_aperture_build/{configs,manifests,gradle_configs,proguard_configs,aux_camera_configs,signing_configs,assets,output}
-          echo "✓ Folder structure created"
+          echo "✓ Struktur folder dibuat"
 
-      # 2. PROGUARD OPTIMIZATION
-      - name: Create ProGuard Config
-        if: ${{ github.event.inputs.step_to_run == 'all' || github.event.inputs.step_to_run == 'proguard' }}
+      # 3. GENERATE ALL CONFIGS (Manifest, Gradle, Proguard, Sapphire XML)
+      - name: Generate Configurations
         run: |
-          cat > fixed_aperture_build/proguard_configs/proguard-rules.pro <<EOF
-          -optimizationpasses 5
-          -allowaccessmodification
-          -dontpreverify
-          -keep public class * extends android.app.Activity
-          -keep class android.hardware.camera2.** { *; }
-          -keep class androidx.camera.** { *; }
-          -keep class com.xiaomi.camera.** { *; }
-          -assumenosideeffects class android.util.Log {
-              public static *** d(...);
-              public static *** v(...);
-          }
-          EOF
-
-      # 3. MANIFEST & GRADLE
-      - name: Generate Build Configurations
-        run: |
+          # Manifest
           cat > fixed_aperture_build/manifests/AndroidManifest.fixed.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${{ github.event.inputs.package_name }}">
@@ -75,6 +61,7 @@ jobs:
           </manifest>
           EOF
 
+          # Gradle
           cat > fixed_aperture_build/gradle_configs/build.gradle <<EOF
           android {
               namespace '${{ github.event.inputs.package_name }}'
@@ -97,9 +84,7 @@ jobs:
           }
           EOF
 
-      # 4. AUX CAMERA CONFIG
-      - name: Create Sapphire Camera XML
-        run: |
+          # Sapphire Aux Camera
           cat > fixed_aperture_build/aux_camera_configs/camera_config_sapphire.xml <<EOF
           <camera-config>
             <sensors>
@@ -110,7 +95,7 @@ jobs:
           </camera-config>
           EOF
 
-      # 5. SIGNING SETUP
+      # 4. SIGNING KEY
       - name: Setup Signing Key
         run: |
           cat > fixed_aperture_build/signing_configs/generate_keystore.sh <<EOF
@@ -121,20 +106,32 @@ jobs:
           EOF
           chmod +x fixed_aperture_build/signing_configs/generate_keystore.sh
 
-      # 6. BUILD PROCESS
-      - name: Build Standalone APK
+      # 5. BUILD APK AND INJECT TO OUTPUT
+      - name: Build and Collect APK
         if: ${{ github.event.inputs.step_to_run == 'all' }}
         run: |
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
             ./gradlew assembleRelease
+            # Cari file APK dan pindahkan ke folder output agar terlihat di repo
+            find . -name "*.apk" -exec cp {} fixed_aperture_build/output/ \;
+            echo "✓ APK berhasil disalin ke fixed_aperture_build/output/"
           else
-            echo "Gradlew not found, but configs were generated successfully."
+            echo "Warning: gradlew tidak ditemukan, hanya file konfigurasi yang akan dipush."
           fi
 
-      # 7. UPLOAD RESULT
+      # 6. PUSH RESULTS BACK TO REPOSITORY (Penting!)
+      - name: Push Changes to Repository
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add fixed_aperture_build/
+          # Commit hanya jika ada perubahan
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-Inject: Sapphire Configs & APK results" && git push)
+
+      # 7. BACKUP AS ARTIFACT (Opsi tambahan jika push gagal)
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aperture-sapphire-final
+          name: aperture-sapphire-final-result
           path: fixed_aperture_build/
