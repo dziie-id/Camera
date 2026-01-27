@@ -14,12 +14,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. SETUP VERSIONING & CLEANUP
+      # 1. SETUP WORKSPACE
       - name: Prepare Workspace
         id: vars
         run: |
-          echo "TAG_NAME=v16-build36-$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
-          # Jangan hapus seluruh folder fixed_aperture_build karena ada kunci di sana
+          echo "TAG_NAME=v16-b36-$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
           rm -rf build_src/
           mkdir -p fixed_aperture_build/output
 
@@ -36,84 +35,82 @@ jobs:
           git clone https://github.com/LineageOS/android_packages_apps_Aperture.git build_src
           echo "ROOT=$GITHUB_WORKSPACE/build_src" >> $GITHUB_ENV
 
-      # 4. HARD-PATCH VERSION, PACKAGE & FEATURES
-      - name: Hard-Patching Source Code
+      # 4. HARD-OVERRIDE VERSIONING & EXPERIMENTAL (FIX PASTI BERHASIL)
+      - name: Force Version 16 & Code 36
         run: |
           cd $ROOT
-          # Force Package Name: org.lineageos.aperture
-          # Force Version Name: 16
-          # Force Version Code (Code Name): 36
-          find . -name "*.gradle" -exec sed -i 's/applicationId "[^"]*"/applicationId "org.lineageos.aperture"/g' {} +
-          find . -name "*.gradle" -exec sed -i 's/versionCode [0-9]*/versionCode 36/g' {} +
-          find . -name "*.gradle" -exec sed -i 's/versionName "[^"]*"/versionName "16"/g' {} +
+          # Mencari file gradle utama yang berisi versi (biasanya app/build.gradle atau app/build.gradle.kts)
+          GRADLE_FILE=$(find . -name "build.gradle" | grep "/app/")
           
-          # Hard-Patch Java agar Experimental Menu & Developer Menu SELALU TRUE
-          find . -name "*.java" -o -name "*.kt" | xargs sed -i 's/return .*EXPERIMENTAL_FEATURES.*/return true;/g' 2>/dev/null || true
-          find . -name "*.java" -o -name "*.kt" | xargs sed -i 's/return .*DEVELOPER_MENU.*/return true;/g' 2>/dev/null || true
+          # Force Override Versioning menggunakan sed yang lebih kuat
+          sed -i 's/versionCode [0-9]*/versionCode 36/g' "$GRADLE_FILE"
+          sed -i 's/versionName "[^"]*"/versionName "16"/g' "$GRADLE_FILE"
+          sed -i 's/applicationId "[^"]*"/applicationId "org.lineageos.aperture"/g' "$GRADLE_FILE"
           
-          # Patch SDK 35 (Android 16 QPR2)
-          find . -name "*.gradle" -exec sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/g' {} +
-          find . -name "*.gradle" -exec sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/g' {} +
+          # Force Enable Experimental & Developer Menu di level logik Java
+          # Kami mencari fungsi penentu fitur dan mengganti return value-nya menjadi true
+          find . -type f -name "*.java" -o -name "*.kt" | xargs sed -i 's/return .*EXPERIMENTAL_FEATURES.*/return true;/g' 2>/dev/null || true
+          find . -type f -name "*.java" -o -name "*.kt" | xargs sed -i 's/return .*DEVELOPER_MENU.*/return true;/g' 2>/dev/null || true
+          
+          # Paksa compile ke SDK 35 agar fitur Android 16 terbuka
+          sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/g' "$GRADLE_FILE"
+          sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/g' "$GRADLE_FILE"
+          
+          echo "✓ Verifikasi File Gradle:"
+          grep -E "versionCode|versionName|applicationId" "$GRADLE_FILE"
 
-          # Injeksi Flag Tambahan ke BuildConfig
-          find . -name "*.gradle" -exec sed -i '/defaultConfig {/a \        buildConfigField "String", "DEVICE_CODENAME", "\"36\""\n        buildConfigField "boolean", "FORCE_AUX_MODES", "true"\n        buildConfigField "boolean", "EXPERIMENTAL_FEATURES", "true"\n        buildConfigField "boolean", "DEVELOPER_MENU", "true"' {} +
-
-      # 5. OVERLAY KONFIGURASI HARDWARE (AUX FORCED)
-      - name: Setup Hardware Overlays
+      # 5. INJECT HARDWARE OVERLAY (FORCE AUX CAMERA)
+      - name: Force AUX Camera Config
         run: |
           RES_DIR="build_src/app/src/main/res/values"
           mkdir -p $RES_DIR
-          cat > $RES_DIR/config_sapphire_fix.xml <<EOF
+          cat > $RES_DIR/config_sapphire_hard_fix.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <bool name="config_multiCameraSupport">true</bool>
               <bool name="config_forceShowAux">true</bool>
-              <string name="config_aux_camera_ids">0,1,2,3</string>
+              <string name="config_aux_camera_ids">0,1,2,3,4</string>
               <string-array name="config_aux_package_allowlist">
                   <item>org.lineageos.aperture</item>
               </string-array>
           </resources>
           EOF
 
-      # 6. BUILD APK (RELEASE)
+      # 6. BUILD APK
       - name: Build APK
         run: |
           cd $ROOT
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      # 7. ZIPALIGN & SIGN WITH PEM/PK8 (Folder fixed_aperture_build)
-      - name: Optimize & Sign with Custom Keys
+      # 7. SIGN WITH YOUR CUSTOM PEM/PK8 KEYS
+      - name: Sign with Custom Keys
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
           RAW_APK=$(find $ROOT -name "*release-unsigned.apk" -o -name "*release.apk" | head -n 1)
           
-          # Path ke kunci Anda di folder fixed_aperture_build
+          # Path kunci Anda
           KEY_PEM="fixed_aperture_build/Key_20260125_203517.x509.pem"
           KEY_PK8="fixed_aperture_build/Key_20260125_203517.pk8"
           
-          # Zipalign
           $BUILD_TOOLS_DIR/zipalign -v 4 "$RAW_APK" fixed_aperture_build/output/aligned.apk
-          
-          # Sign menggunakan file kunci yang ditaruh di folder fixed_aperture_build
-          $BUILD_TOOLS_DIR/apksigner sign --key "$KEY_PK8" \
-            --cert "$KEY_PEM" \
+          $BUILD_TOOLS_DIR/apksigner sign --key "$KEY_PK8" --cert "$KEY_PEM" \
             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled true \
-            --out fixed_aperture_build/output/Aperture-v16-Sapphire-Signed.apk \
+            --out fixed_aperture_build/output/Aperture-v16-Final.apk \
             fixed_aperture_build/output/aligned.apk
 
-      # 8. CREATE GITHUB RELEASE
+      # 8. UPLOAD RELEASE
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.TAG_NAME }}
-          name: Aperture Sapphire v16 (Code 36)
+          name: Aperture Sapphire v16 Build 36
           body: |
-            ### 📸 Aperture v16 Build 36
-            - **Package Name:** `org.lineageos.aperture`
-            - **Version:** 16 (Build 36)
-            - **Signer:** Custom Platform Keys (PEM/PK8)
-            - **Features:** Hard-patched Experimental Menu, Forced AUX (0,1,2,3).
-          files: fixed_aperture_build/output/Aperture-v16-Sapphire-Signed.apk
+            ### 🛠 Fix Update:
+            - **Version Name:** 16 (Fixed)
+            - **Version Code:** 36 (Fixed)
+            - **AUX Camera:** Forced ID 0,1,2,3,4
+            - **Experimental Menu:** Hard-coded to ALWAYS TRUE
+          files: fixed_aperture_build/output/Aperture-v16-Final.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
