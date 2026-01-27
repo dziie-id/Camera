@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.aperture.standalone">
-  <uses-permission android:name="android.permission.CAMERA" />
-  <uses-permission android:name="android.permission.RECORD_AUDIO" />
-  <application android:label="Aperture Sapphire" android:theme="@style/Theme.Aperture">
-    <activity android:name=".MainActivity" android:exported="true" />
-  </application>
-</manifest>

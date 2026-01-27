@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<camera-config>
-  <sensors>
-    <sensor id="0" type="back" name="IMX582" />
-    <sensor id="1" type="front" name="OV13B10" />
-    <sensor id="2" type="aux" name="GC02M1" purpose="macro" />
-    <sensor id="3" type="aux" name="ULTRA_WIDE" />
-  </sensors>
-</camera-config>
