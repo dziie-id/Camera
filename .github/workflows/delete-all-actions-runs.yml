@@ -1,4 +1,4 @@
-name: Manual Clear Actions History
+name: Manual Delete Actions History
 
 on:
   workflow_dispatch:
@@ -8,11 +8,11 @@ permissions:
   contents: read
 
 jobs:
-  clear:
+  delete-actions-history:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Delete ALL Actions runs shown in Actions tab
+      - name: Delete ALL Actions runs (manual)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}
@@ -20,21 +20,20 @@ jobs:
         run: |
           set -e
 
+          echo "Start deleting Actions history..."
+
           PAGE=1
           PER_PAGE=100
 
-          echo "Starting manual deletion of Actions history..."
-
           while true; do
-            RESPONSE=$(curl -s \
+            RUN_IDS=$(curl -s \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/$OWNER/$REPO/actions/runs?per_page=$PER_PAGE&page=$PAGE")
-
-            RUN_IDS=$(echo "$RESPONSE" | jq -r '.workflow_runs[].id')
+              "https://api.github.com/repos/${OWNER}/${REPO}/actions/runs?per_page=${PER_PAGE}&page=${PAGE}" \
+              | jq -r '.workflow_runs[].id')
 
             if [ -z "$RUN_IDS" ]; then
-              echo "No more runs found. Finished."
+              echo "No more Actions runs found."
               break
             fi
 
@@ -43,5 +42,11 @@ jobs:
               curl -s -X DELETE \
                 -H "Authorization: Bearer $GH_TOKEN" \
                 -H "Accept: application/vnd.github+json" \
-                "https://api.github.com/repos/
-                
+                "https://api.github.com/repos/${OWNER}/${REPO}/actions/runs/${RUN_ID}"
+            done
+
+            PAGE=$((PAGE + 1))
+          done
+
+          echo "DONE: All Actions history deleted."
+          
