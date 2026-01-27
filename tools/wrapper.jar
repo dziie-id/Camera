@@ -1,0 +1,12 @@
+onCreate() {
+  muteSystemSound();
+  disableVibration();
+
+  if (needWide()) {
+     launch("com.google.android.GoogleCamera");
+  } else {
+     launch("org.lineageos.aperture");
+  }
+
+  finish();
+}
