@@ -1,13 +1,7 @@
-name: Build Aperture Sapphire - Android 16 QPR2 Final v3
+name: Build Aperture Sapphire - Android 16 QPR2 Final
 
 on:
   workflow_dispatch:
-    inputs:
-      package_name:
-        description: 'Package Name'
-        required: true
-        default: 'org.lineageos.aperture'
-        type: string
 
 jobs:
   build_process:
@@ -20,23 +14,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. CLEANUP & VERSIONING
+      # 1. SETUP VERSIONING & CLEANUP
       - name: Prepare Workspace
         id: vars
         run: |
-          echo "TAG_NAME=v16-b36-$(date +'%H%M')" >> $GITHUB_OUTPUT
-          if [ -d "source" ]; then git rm -rf source || rm -rf source; fi
-          rm -rf fixed_aperture_build/
+          echo "TAG_NAME=v16-build36-$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+          # Jangan hapus seluruh folder fixed_aperture_build karena ada kunci di sana
+          rm -rf build_src/
           mkdir -p fixed_aperture_build/output
 
-      # 2. SETUP JDK 21 (FIXED: Matikan cache agar tidak error)
+      # 2. SETUP JDK 21
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
-          # Cache dimatikan karena kita melakukan clone manual di step berikutnya
-          # cache: 'gradle' 
 
       # 3. FRESH CLONE SOURCE
       - name: Clone Aperture Source
@@ -44,83 +36,84 @@ jobs:
           git clone https://github.com/LineageOS/android_packages_apps_Aperture.git build_src
           echo "ROOT=$GITHUB_WORKSPACE/build_src" >> $GITHUB_ENV
 
-      # 4. PATCH ANDROID 16 & EXPERIMENTAL MENU
-      - name: Patching for Android 16 & Sapphire Features
+      # 4. HARD-PATCH VERSION, PACKAGE & FEATURES
+      - name: Hard-Patching Source Code
         run: |
           cd $ROOT
-          # Set Nama Versi 16 dan Kode Versi 36
+          # Force Package Name: org.lineageos.aperture
+          # Force Version Name: 16
+          # Force Version Code (Code Name): 36
+          find . -name "*.gradle" -exec sed -i 's/applicationId "[^"]*"/applicationId "org.lineageos.aperture"/g' {} +
           find . -name "*.gradle" -exec sed -i 's/versionCode [0-9]*/versionCode 36/g' {} +
           find . -name "*.gradle" -exec sed -i 's/versionName "[^"]*"/versionName "16"/g' {} +
           
-          # Update SDK ke 35
+          # Hard-Patch Java agar Experimental Menu & Developer Menu SELALU TRUE
+          find . -name "*.java" -o -name "*.kt" | xargs sed -i 's/return .*EXPERIMENTAL_FEATURES.*/return true;/g' 2>/dev/null || true
+          find . -name "*.java" -o -name "*.kt" | xargs sed -i 's/return .*DEVELOPER_MENU.*/return true;/g' 2>/dev/null || true
+          
+          # Patch SDK 35 (Android 16 QPR2)
           find . -name "*.gradle" -exec sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/g' {} +
           find . -name "*.gradle" -exec sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/g' {} +
-          
-          # Hapus warning package 'fishfood'
-          find . -name "AndroidManifest.xml" -exec sed -i 's/package="[^"]*"//g' {} +
 
-          # AKTIFKAN SEMUA MENU EKSPERIMENTAL & DEVELOPER
-          find . -name "*.gradle" -exec sed -i '/defaultConfig {/a \        buildConfigField "String", "DEVICE_CODENAME", "\"sapphire\""\n        buildConfigField "boolean", "FORCE_AUX_MODES", "true"\n        buildConfigField "boolean", "EXPERIMENTAL_FEATURES", "true"\n        buildConfigField "boolean", "DEVELOPER_MENU", "true"' {} +
-          
-          echo "✓ Versioning (16/36) and All Experimental Flags Injected."
+          # Injeksi Flag Tambahan ke BuildConfig
+          find . -name "*.gradle" -exec sed -i '/defaultConfig {/a \        buildConfigField "String", "DEVICE_CODENAME", "\"36\""\n        buildConfigField "boolean", "FORCE_AUX_MODES", "true"\n        buildConfigField "boolean", "EXPERIMENTAL_FEATURES", "true"\n        buildConfigField "boolean", "DEVELOPER_MENU", "true"' {} +
 
-      # 5. SETUP RES FILES FOR MULTI-CAMERA
-      - name: Setup Multi-Camera Resources
+      # 5. OVERLAY KONFIGURASI HARDWARE (AUX FORCED)
+      - name: Setup Hardware Overlays
         run: |
-          mkdir -p build_src/app/src/main/res/values
-          cat > build_src/app/src/main/res/values/config_sapphire.xml <<EOF
+          RES_DIR="build_src/app/src/main/res/values"
+          mkdir -p $RES_DIR
+          cat > $RES_DIR/config_sapphire_fix.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <bool name="config_multiCameraSupport">true</bool>
+              <bool name="config_forceShowAux">true</bool>
+              <string name="config_aux_camera_ids">0,1,2,3</string>
               <string-array name="config_aux_package_allowlist">
-                  <item>${{ github.event.inputs.package_name }}</item>
+                  <item>org.lineageos.aperture</item>
               </string-array>
           </resources>
           EOF
 
-      # 6. GENERATE KEYSTORE
-      - name: Generate Keystore
-        run: |
-          mkdir -p fixed_aperture_build/signing_configs
-          KEYSTORE_FILE="fixed_aperture_build/signing_configs/release.keystore"
-          rm -f "$KEYSTORE_FILE"
-          keytool -genkey -v -keystore "$KEYSTORE_FILE" \
-            -alias aperture_key -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Aperture, OU=LineageOS, O=CustomROM, L=Jakarta, C=ID" \
-            -storepass password123 -keypass password123
-
-      # 7. BUILD APK
+      # 6. BUILD APK (RELEASE)
       - name: Build APK
         run: |
           cd $ROOT
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      # 8. ZIPALIGN & SIGN V4
-      - name: Optimize & Sign
+      # 7. ZIPALIGN & SIGN WITH PEM/PK8 (Folder fixed_aperture_build)
+      - name: Optimize & Sign with Custom Keys
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
-          RAW_APK=$(find $ROOT -name "*release.apk" -o -name "*release-unsigned.apk" | head -n 1)
+          RAW_APK=$(find $ROOT -name "*release-unsigned.apk" -o -name "*release.apk" | head -n 1)
           
+          # Path ke kunci Anda di folder fixed_aperture_build
+          KEY_PEM="fixed_aperture_build/Key_20260125_203517.x509.pem"
+          KEY_PK8="fixed_aperture_build/Key_20260125_203517.pk8"
+          
+          # Zipalign
           $BUILD_TOOLS_DIR/zipalign -v 4 "$RAW_APK" fixed_aperture_build/output/aligned.apk
-          $BUILD_TOOLS_DIR/apksigner sign --ks fixed_aperture_build/signing_configs/release.keystore \
-            --ks-key-alias aperture_key --ks-pass pass:password123 --key-pass pass:password123 \
+          
+          # Sign menggunakan file kunci yang ditaruh di folder fixed_aperture_build
+          $BUILD_TOOLS_DIR/apksigner sign --key "$KEY_PK8" \
+            --cert "$KEY_PEM" \
             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled true \
-            --out fixed_aperture_build/output/Aperture-Sapphire-A16.apk \
+            --out fixed_aperture_build/output/Aperture-v16-Sapphire-Signed.apk \
             fixed_aperture_build/output/aligned.apk
 
-      # 9. PUSH & RELEASE
+      # 8. CREATE GITHUB RELEASE
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.vars.outputs.TAG_NAME }}
-          name: Aperture Sapphire v16 (Build 36)
+          name: Aperture Sapphire v16 (Code 36)
           body: |
-            ## Aperture Camera Android 16 QPR2
-            - **Version:** 16 (Code 36)
-            - **Experimental Features:** Enabled
-            - **Developer Menu:** Enabled
-            - **AUX Modes:** Forced (0.6x Support)
-          files: fixed_aperture_build/output/Aperture-Sapphire-A16.apk
+            ### 📸 Aperture v16 Build 36
+            - **Package Name:** `org.lineageos.aperture`
+            - **Version:** 16 (Build 36)
+            - **Signer:** Custom Platform Keys (PEM/PK8)
+            - **Features:** Hard-patched Experimental Menu, Forced AUX (0,1,2,3).
+          files: fixed_aperture_build/output/Aperture-v16-Sapphire-Signed.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
