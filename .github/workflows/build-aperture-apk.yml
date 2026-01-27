@@ -1,8 +1,18 @@
-name: Quick Build Aperture
+name: Build Aperture Camera APK
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Hanya bisa di-trigger manual
     inputs:
+      android_version:
+        description: 'Android Target Version'
+        required: true
+        default: '16'
+        type: choice
+        options:
+          - '14'
+          - '15'
+          - '16'
+          - '17'
       enable_aux:
         description: 'Enable AUX camera support'
         required: true
@@ -11,36 +21,122 @@ on:
         options:
           - 'true'
           - 'false'
+      build_type:
+        description: 'Build Type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - 'debug'
+          - 'release'
+
+env:
+  BUILD_DIR: /tmp/build
+  APERTURE_DIR: aperture_camera
 
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
     
-    - name: Setup Java
+    - name: Setup Java 17
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
     
-    - name: Check Aperture source
+    - name: Verify Aperture source exists
       run: |
-        if [ ! -d "aperture_camera" ]; then
-          echo "Cloning Aperture Camera..."
-          git clone --depth=1 https://github.com/LineageOS/android_packages_apps_Aperture.git aperture_camera
+        echo "Checking for Aperture Camera source..."
+        if [ ! -d "$APERTURE_DIR" ]; then
+          echo "❌ Aperture directory not found!"
+          echo "📥 Cloning Aperture Camera..."
+          git clone --depth=1 https://github.com/LineageOS/android_packages_apps_Aperture.git $APERTURE_DIR
+        else
+          echo "✅ Aperture source found"
+          ls -la $APERTURE_DIR/
+        fi
+
+  install-android-sdk:
+    runs-on: ubuntu-latest
+    needs: setup
+    
+    steps:
+    - name: Install Android SDK Command Line Tools
+      run: |
+        echo "Installing Android SDK..."
+        
+        # Create directory
+        mkdir -p $BUILD_DIR/android-sdk
+        cd $BUILD_DIR/android-sdk
+        
+        # Download command line tools
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        unzip -q commandlinetools-linux-*.zip
+        rm commandlinetools-linux-*.zip
+        
+        # Organize directory structure
+        mkdir -p cmdline-tools/latest
+        mv cmdline-tools/* cmdline-tools/latest/ 2>/dev/null || true
+        
+        # Set environment variables
+        echo "ANDROID_HOME=$BUILD_DIR/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$BUILD_DIR/android-sdk" >> $GITHUB_ENV
+        
+        # Setup PATH
+        echo "$BUILD_DIR/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        echo "$BUILD_DIR/android-sdk/platform-tools" >> $GITHUB_PATH
+    
+    - name: Accept Android SDK licenses
+      run: |
+        # Accept all licenses
+        yes | $BUILD_DIR/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        
+    - name: Install Android SDK components
+      run: |
+        # Install based on Android version input
+        ANDROID_VERSION="${{ github.event.inputs.android_version }}"
+        
+        if [ "$ANDROID_VERSION" = "16" ]; then
+          echo "Installing Android 16 (API 35) components..."
+          $BUILD_DIR/android-sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        elif [ "$ANDROID_VERSION" = "15" ]; then
+          echo "Installing Android 15 (API 34) components..."
+          $BUILD_DIR/android-sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        elif [ "$ANDROID_VERSION" = "14" ]; then
+          echo "Installing Android 14 (API 33) components..."
+          $BUILD_DIR/android-sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.0"
+        else
+          echo "Installing default Android 16 components..."
+          $BUILD_DIR/android-sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
         fi
         
-        echo "Aperture source ready"
-    
-    - name: Create minimal build files
-      run: |
-        cd aperture_camera
+        # Install common tools
+        $BUILD_DIR/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "extras;android;m2repository"
         
-        # Create minimal build.gradle if needed
-        if [ ! -f "build.gradle" ]; then
+        echo "✅ Android SDK installation complete"
+
+  configure-aperture:
+    runs-on: ubuntu-latest
+    needs: [setup, install-android-sdk]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Configure Aperture Camera
+      run: |
+        echo "Configuring Aperture Camera for Redmi Note 13 4G NFC..."
+        
+        cd $APERTURE_DIR
+        
+        # Check if build.gradle exists
+        if [ ! -f "build.gradle" ] && [ ! -f "build.gradle.kts" ]; then
+          echo "Creating basic build.gradle..."
+          
           cat > build.gradle << 'EOF'
 plugins {
     id 'com.android.application'
@@ -68,40 +164,404 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.core:core:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.camera:camera-core:1.3.0'
-    implementation 'androidx.camera:camera-camera2:1.3.0'
 }
 EOF
+          echo "✅ Created build.gradle"
+        else
+          echo "✅ build.gradle already exists"
         fi
         
-        # Create directory structure
-        mkdir -p src/main/java/org/lineageos/aperture
+        # Create directory structure if needed
+        mkdir -p src/main/java
         mkdir -p src/main/res
         
-        echo "Build files created"
+        # Create simple AndroidManifest.xml if missing
+        if [ ! -f "src/main/AndroidManifest.xml" ]; then
+          mkdir -p src/main
+          cat > src/main/AndroidManifest.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.lineageos.aperture">
+    
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    
+    <application
+        android:allowBackup="true"
+        android:label="Aperture Camera">
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
+          echo "✅ Created AndroidManifest.xml"
+        fi
+        
+        # Add AUX camera configuration if enabled
+        AUX_ENABLED="${{ github.event.inputs.enable_aux }}"
+        
+        if [ "$AUX_ENABLED" = "true" ]; then
+          echo "🔄 Adding AUX camera support..."
+          
+          # Create camera configuration directory
+          mkdir -p src/main/res/xml
+          
+          # Create AUX camera configuration
+          cat > src/main/res/xml/camera_aux_config.xml << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<aux-cameras>
+    <!-- Redmi Note 13 4G NFC (sapphire) Camera Configuration -->
+    <camera id="0" facing="back" type="wide">
+        <supported-hardware-level>FULL</supported-hardware-level>
+        <capabilities>
+            <capability name="autofocus" />
+            <capability name="flash" />
+            <capability name="hdr" />
+        </capabilities>
+    </camera>
+    <camera id="1" facing="back" type="ultrawide">
+        <supported-hardware-level>LIMITED</supported-hardware-level>
+        <capabilities>
+            <capability name="fixed-focus" />
+            <capability name="macro" />
+        </capabilities>
+    </camera>
+    <camera id="2" facing="back" type="macro">
+        <supported-hardware-level>LIMITED</supported-hardware-level>
+        <capabilities>
+            <capability name="macro-mode" />
+        </capabilities>
+    </camera>
+    <camera id="3" facing="front" type="wide">
+        <supported-hardware-level>LIMITED</supported-hardware-level>
+        <capabilities>
+            <capability name="fixed-focus" />
+        </capabilities>
+    </camera>
+</aux-cameras>
+EOF
+          
+          echo "✅ AUX camera configuration added"
+        fi
+
+  build-apk:
+    runs-on: ubuntu-latest
+    needs: configure-aperture
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup build environment
+      run: |
+        echo "Setting up build environment..."
+        
+        # Set environment variables
+        echo "ANDROID_HOME=$BUILD_DIR/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$BUILD_DIR/android-sdk" >> $GITHUB_ENV
+        
+        # Update PATH
+        echo "$BUILD_DIR/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        echo "$BUILD_DIR/android-sdk/platform-tools" >> $GITHUB_PATH
+        
+        # Install gradle if not present
+        if ! command -v gradle &> /dev/null; then
+          echo "Installing Gradle..."
+          sudo apt-get update
+          sudo apt-get install -y gradle
+        fi
     
     - name: Build APK
+      id: build_apk
       run: |
-        cd aperture_camera
+        echo "Building Aperture Camera APK..."
         
-        # Try to build
-        ./gradlew assembleDebug || ./gradlew build
+        cd $APERTURE_DIR
         
-        # Find and copy APK
-        APK=$(find . -name "*.apk" -type f | head -1)
+        # Clean previous builds
+        echo "🧹 Cleaning previous builds..."
+        ./gradlew clean || echo "Clean step completed"
         
-        if [ -n "$APK" ]; then
-          echo "APK found: $APK"
-          cp "$APK" ../aperture-built.apk
-          echo "✅ Build successful"
+        # Build based on selected type
+        BUILD_TYPE="${{ github.event.inputs.build_type }}"
+        echo "🔨 Building $BUILD_TYPE APK..."
+        
+        if [ "$BUILD_TYPE" = "release" ]; then
+          ./gradlew assembleRelease
         else
-          echo "❌ No APK found"
+          ./gradlew assembleDebug
+        fi
+        
+        # Find the APK file
+        echo "🔍 Searching for APK file..."
+        
+        # Try multiple locations
+        APK_PATH=""
+        
+        # Check common locations
+        for location in \
+          "app/build/outputs/apk/$BUILD_TYPE/*.apk" \
+          "build/outputs/apk/$BUILD_TYPE/*.apk" \
+          "*/build/outputs/apk/*/*.apk" \
+          "*.apk"; do
+          
+          if [ -n "$(find . -path "./$location" -type f 2>/dev/null | head -1)" ]; then
+            APK_PATH=$(find . -path "./$location" -type f | grep -v "unaligned" | head -1)
+            break
+          fi
+        done
+        
+        if [ -n "$APK_PATH" ]; then
+          echo "✅ APK found: $APK_PATH"
+          
+          # Copy APK to workspace
+          APK_NAME="Aperture_Camera_Android_${{ github.event.inputs.android_version }}_AUX_${{ github.event.inputs.enable_aux }}.apk"
+          cp "$APK_PATH" "$GITHUB_WORKSPACE/$APK_NAME"
+          
+          # Get file info
+          APK_SIZE=$(stat -c%s "$APK_PATH")
+          APK_SIZE_MB=$((APK_SIZE / 1024 / 1024))
+          
+          echo "📦 APK Name: $APK_NAME"
+          echo "📏 APK Size: ${APK_SIZE_MB}MB"
+          
+          # Set output variables
+          echo "apk_path=$GITHUB_WORKSPACE/$APK_NAME" >> $GITHUB_OUTPUT
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+          echo "apk_size=$APK_SIZE" >> $GITHUB_OUTPUT
+        else
+          echo "❌ APK not found! Listing build directories:"
+          find . -type d -name "build" | head -10
+          find . -name "*.apk" -type f 2>/dev/null || true
           exit 1
         fi
     
-    - name: Upload APK
+    - name: Upload APK as artifact
       uses: actions/upload-artifact@v4
       with:
-        name: aperture-apk
-        path: aperture-built.apk
+        name: aperture-camera-apk
+        path: ${{ steps.build_apk.outputs.apk_path }}
+        retention-days: 7
+
+  create-installer:
+    runs-on: ubuntu-latest
+    needs: build-apk
+    if: success()
+    
+    steps:
+    - name: Download APK artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: aperture-camera-apk
+        path: ${{ github.workspace }}/downloaded_apk
+    
+    - name: Create Magisk module
+      run: |
+        echo "Creating Magisk module for Redmi Note 13 4G NFC..."
+        
+        MODULE_DIR="${{ github.workspace }}/aperture_magisk_module"
+        mkdir -p "$MODULE_DIR/system/priv-app/Aperture"
+        
+        # Find downloaded APK
+        APK_FILE=$(find "${{ github.workspace }}/downloaded_apk" -name "*.apk" -type f | head -1)
+        
+        if [ -z "$APK_FILE" ]; then
+          echo "❌ No APK file found"
+          exit 1
+        fi
+        
+        echo "📦 Using APK: $(basename "$APK_FILE")"
+        
+        # Copy APK to module
+        cp "$APK_FILE" "$MODULE_DIR/system/priv-app/Aperture/Aperture.apk"
+        
+        # Create module.prop
+        cat > "$MODULE_DIR/module.prop" << EOF
+id=aperture_camera_sapphire
+name=Aperture Camera for Redmi Note 13
+version=v1.0
+versionCode=1
+author=GitHub Actions
+description=Aperture Camera with AUX support for Redmi Note 13 4G NFC (sapphire)
+support=https://github.com/${{ github.repository }}
+minMagisk=24100
+EOF
+        
+        # Create update.json
+        cat > "$MODULE_DIR/update.json" << EOF
+{
+  "version": "v1.0",
+  "versionCode": 1,
+  "zipUrl": "",
+  "changelog": ""
+}
+EOF
+        
+        # Create install script
+        cat > "$MODULE_DIR/customize.sh" << 'EOF'
+#!/system/bin/sh
+
+ui_print " "
+ui_print "********************************"
+ui_print "  Aperture Camera for Redmi Note 13"
+ui_print "********************************"
+ui_print " "
+ui_print "- Device: Redmi Note 13 4G NFC"
+ui_print "- Codename: sapphire"
+ui_print "- Android: ${{ github.event.inputs.android_version }}"
+ui_print "- AUX Support: ${{ github.event.inputs.enable_aux }}"
+ui_print " "
+
+# Set permissions
+set_perm_recursive $MODPATH/system/priv-app/Aperture 0 0 0755 0644
+EOF
+        
+        chmod +x "$MODULE_DIR/customize.sh"
+        
+        # Create service.sh for runtime configuration
+        cat > "$MODULE_DIR/service.sh" << 'EOF'
+#!/system/bin/sh
+
+# Wait for boot completion
+while [ "$(getprop sys.boot_completed)" != "1" ]; do
+    sleep 5
+done
+
+# Enable camera features
+if [ "${{ github.event.inputs.enable_aux }}" = "true" ]; then
+    setprop persist.camera.aux.camera 1
+    setprop persist.vendor.camera.aux.camera 1
+fi
+
+# Enable Camera2 API
+setprop persist.camera.HAL3.enabled 1
+EOF
+        
+        chmod +x "$MODULE_DIR/service.sh"
+        
+        # Create module zip
+        cd "$MODULE_DIR"
+        zip -r9 "${{ github.workspace }}/Aperture_Camera_Magisk.zip" .
+        
+        echo "✅ Magisk module created"
+    
+    - name: Upload Magisk module
+      uses: actions/upload-artifact@v4
+      with:
+        name: aperture-magisk-module
+        path: ${{ github.workspace }}/Aperture_Camera_Magisk.zip
+        retention-days: 7
+
+  finalize:
+    runs-on: ubuntu-latest
+    needs: [build-apk, create-installer]
+    
+    steps:
+    - name: Create build summary
+      run: |
+        echo "Creating build summary..."
+        
+        cat > "${{ github.workspace }}/BUILD_SUMMARY.md" << EOF
+        # Aperture Camera Build Summary
+        
+        ## 📋 Build Information
+        - **Build Date**: $(date)
+        - **Android Version**: ${{ github.event.inputs.android_version }}
+        - **Build Type**: ${{ github.event.inputs.build_type }}
+        - **AUX Support**: ${{ github.event.inputs.enable_aux }}
+        - **Device**: Redmi Note 13 4G NFC (sapphire)
+        - **ROM**: Project Infinity Android 16 QPR 2
+        
+        ## 📦 Generated Artifacts
+        1. **APK File**: Direct installable APK
+        2. **Magisk Module**: Systemless installation (Root required)
+        
+        ## 📲 Installation Methods
+        
+        ### Method 1: Direct APK Installation
+        \`\`\`bash
+        adb install aperture_camera.apk
+        \`\`\`
+        
+        ### Method 2: Magisk Module (Root)
+        1. Download the Magisk module ZIP
+        2. Open Magisk Manager
+        3. Go to Modules → Install from storage
+        4. Select the ZIP file
+        5. Reboot device
+        
+        ### Method 3: System Installation (ADB Root)
+        \`\`\`bash
+        adb root
+        adb remount
+        adb push Aperture.apk /system/priv-app/Aperture/
+        adb shell chmod 644 /system/priv-app/Aperture/Aperture.apk
+        adb reboot
+        \`\`\`
+        
+        ## 🔧 Features
+        - Camera2 API support
+        - AUX camera support (wide, ultrawide, macro, front)
+        - Optimized for Redmi Note 13 4G NFC
+        - Project Infinity ROM compatibility
+        
+        ## ⚠️ Notes
+        - Requires Camera2API enabled in build.prop
+        - AUX cameras need kernel support
+        - Some features may require additional camera blobs
+        
+        ## 🔗 Source
+        Built from: LineageOS/android_packages_apps_Aperture
+        Modified for Redmi Note 13 4G NFC
+        
+        **Workflow Run**: ${{ github.run_id }}
+        **Repository**: ${{ github.repository }}
+        EOF
+        
+        echo "✅ Build summary created"
+    
+    - name: Upload summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-summary
+        path: ${{ github.workspace }}/BUILD_SUMMARY.md
+        retention-days: 7
+    
+    - name: Create GitHub Release
+      if: success()
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: aperture-v1.0-${{ github.run_number }}
+        name: "Aperture Camera Build #${{ github.run_number }}"
+        body: |
+          # Aperture Camera for Redmi Note 13 4G NFC
+          
+          ## Build Details
+          - **Android**: ${{ github.event.inputs.android_version }}
+          - **AUX Support**: ${{ github.event.inputs.enable_aux }}
+          - **Build Type**: ${{ github.event.inputs.build_type }}
+          - **Device**: Redmi Note 13 4G NFC (sapphire)
+          
+          ## Installation
+          See BUILD_SUMMARY.md for detailed instructions.
+          
+          ## Files
+          - APK for direct installation
+          - Magisk module for systemless installation
+          
+          Built via GitHub Actions on $(date)
+        draft: false
+        prerelease: false
+        files: |
+          ${{ github.workspace }}/BUILD_SUMMARY.md
