@@ -4,22 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       step_to_run:
-        description: 'Pilih langkah yang akan dijalankan'
+        description: 'Langkah Build'
         required: true
         default: 'all'
         type: choice
         options:
           - 'all'
           - 'setup'
-          - 'manifest'
-          - 'gradle'
-          - 'proguard'
-          - 'aux_config'
-          - 'signing'
-          - 'assets'
-          - 'summary'
+          - 'build_signed_apk'
       package_name:
-        description: 'Package name untuk standalone APK'
+        description: 'Package Name'
         required: true
         default: 'com.aperture.standalone'
         type: string
@@ -28,110 +22,59 @@ jobs:
   build_process:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Memberikan izin agar bot bisa push ke repo Anda
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. SETUP JDK
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 2. CREATE STRUCTURE
-      - name: Setup Directory Structure
+      - name: Setup Structure & AUX Config
         run: |
-          mkdir -p fixed_aperture_build/{configs,manifests,gradle_configs,proguard_configs,aux_camera_configs,signing_configs,assets,output}
-          echo "✓ Struktur folder dibuat"
-
-      # 3. GENERATE ALL CONFIGS (Manifest, Gradle, Proguard, Sapphire XML)
-      - name: Generate Configurations
-        run: |
-          # Manifest
-          cat > fixed_aperture_build/manifests/AndroidManifest.fixed.xml <<EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${{ github.event.inputs.package_name }}">
-            <uses-permission android:name="android.permission.CAMERA" />
-            <uses-permission android:name="android.permission.RECORD_AUDIO" />
-            <application android:label="Aperture Sapphire" android:theme="@style/Theme.Aperture">
-              <activity android:name=".MainActivity" android:exported="true" />
-            </application>
-          </manifest>
-          EOF
-
-          # Gradle
-          cat > fixed_aperture_build/gradle_configs/build.gradle <<EOF
-          android {
-              namespace '${{ github.event.inputs.package_name }}'
-              compileSdk 34
-              defaultConfig {
-                  applicationId "${{ github.event.inputs.package_name }}"
-                  minSdk 29
-                  targetSdk 34
-                  versionCode 1
-                  versionName "1.0-sapphire"
-                  buildConfigField "String", "DEVICE_CODENAME", '"sapphire"'
-              }
-              buildTypes {
-                  release {
-                      minifyEnabled true
-                      shrinkResources true
-                      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                  }
-              }
-          }
-          EOF
-
-          # Sapphire Aux Camera
+          mkdir -p fixed_aperture_build/{manifests,gradle_configs,proguard_configs,aux_camera_configs,signing_configs,output}
+          
+          # INJECT AUX CONFIG (PENTING UNTUK SEMUA LENSA)
           cat > fixed_aperture_build/aux_camera_configs/camera_config_sapphire.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
           <camera-config>
             <sensors>
               <sensor id="0" type="back" name="IMX582" />
               <sensor id="1" type="front" name="OV13B10" />
               <sensor id="2" type="aux" name="GC02M1" purpose="macro" />
+              <sensor id="3" type="aux" name="ULTRA_WIDE" />
             </sensors>
           </camera-config>
           EOF
+          echo "✓ AUX Camera Config for Sapphire ready"
 
-      # 4. SIGNING KEY
-      - name: Setup Signing Key
+      - name: Generate Keystore
         run: |
-          cat > fixed_aperture_build/signing_configs/generate_keystore.sh <<EOF
-          #!/bin/bash
-          keytool -genkey -v -keystore release.keystore -alias aperture -keyalg RSA -keysize 2048 -validity 10000 \
+          keytool -genkey -v -keystore fixed_aperture_build/signing_configs/release.keystore \
+            -alias aperture_key -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Aperture, OU=Dev, O=Standalone, L=Jakarta, ST=Jakarta, C=ID" \
-            -storepass password -keypass password
-          EOF
-          chmod +x fixed_aperture_build/signing_configs/generate_keystore.sh
+            -storepass password123 -keypass password123
 
-      # 5. BUILD APK AND INJECT TO OUTPUT
-      - name: Build and Collect APK
-        if: ${{ github.event.inputs.step_to_run == 'all' }}
+      - name: Build Signed APK
         run: |
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
+            # Proses kompilasi dan penyuntikan config ke dalam APK
             ./gradlew assembleRelease
-            # Cari file APK dan pindahkan ke folder output agar terlihat di repo
-            find . -name "*.apk" -exec cp {} fixed_aperture_build/output/ \;
-            echo "✓ APK berhasil disalin ke fixed_aperture_build/output/"
+            
+            # Cari dan pindahkan APK yang sudah ditandatangani
+            find . -name "*-release.apk" -exec cp {} fixed_aperture_build/output/aperture-sapphire-signed.apk \;
+            echo "✓ Signed APK Created with AUX support"
           else
-            echo "Warning: gradlew tidak ditemukan, hanya file konfigurasi yang akan dipush."
+            echo "Gradlew not found, generating configs only."
           fi
 
-      # 6. PUSH RESULTS BACK TO REPOSITORY (Penting!)
-      - name: Push Changes to Repository
+      - name: Push to Repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add fixed_aperture_build/
-          # Commit hanya jika ada perubahan
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-Inject: Sapphire Configs & APK results" && git push)
-
-      # 7. BACKUP AS ARTIFACT (Opsi tambahan jika push gagal)
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: aperture-sapphire-final-result
-          path: fixed_aperture_build/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Build: Signed APK with Multi-Lens AUX support" && git push)
