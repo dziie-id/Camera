@@ -1,4 +1,4 @@
-name: Build Aperture Camera Signed
+name: Build Aperture Camera Signed Final
 
 on:
   workflow_dispatch:
@@ -18,21 +18,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. SETUP JDK
+      # 1. SETUP JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      # 2. SETUP STRUKTUR OUTPUT
-      - name: Setup Output Folder
+      # 2. SETUP STRUKTUR & AUX CONFIG (Support Multi-Lensa Sapphire)
+      - name: Setup Output Folder & AUX Config
         run: |
           mkdir -p fixed_aperture_build/{aux_camera_configs,signing_configs,output}
-
-      # 3. GENERATE AUX CONFIG (Untuk Multi-Lensa Sapphire)
-      - name: Inject Sapphire AUX Config
-        run: |
           cat > fixed_aperture_build/aux_camera_configs/camera_config_sapphire.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <camera-config>
@@ -44,53 +40,74 @@ jobs:
             </sensors>
           </camera-config>
           EOF
+          echo "✓ AUX Camera Config for Sapphire ready"
 
-      # 4. BYPASS/RESET KEYSTORE (Menghapus file lama jika ada)
+      # 3. GENERATE/RESET KEYSTORE (Anti Error Alias)
       - name: Generate Keystore
         run: |
           KEYSTORE_FILE="fixed_aperture_build/signing_configs/release.keystore"
-          
-          # Hapus file keystore jika sudah ada agar tidak terjadi error alias sudah ada
-          if [ -f "$KEYSTORE_FILE" ]; then
-            echo "Keystore ditemukan, menghapus untuk membuat ulang..."
-            rm -f "$KEYSTORE_FILE"
-          fi
-          
+          rm -f "$KEYSTORE_FILE"
           keytool -genkey -v -keystore "$KEYSTORE_FILE" \
             -alias aperture_key -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Aperture, OU=Dev, O=Standalone, L=Jakarta, ST=Jakarta, C=ID" \
             -storepass password123 -keypass password123
-          echo "✓ Keystore berhasil dibuat ulang tanpa error."
+          echo "✓ Keystore berhasil dibuat ulang"
 
-      # 5. BUILD APK DARI FOLDER SOURCE
-      - name: Build Signed APK
+      # 4. FIX REPOSITORIES & DEPENDENCIES
+      - name: Fix Project Repositories
         run: |
-          # Masuk ke folder source sesuai struktur repo Anda
-          cd source
+          find . -name "build.gradle" -exec sed -i 's/jcenter()/mavenCentral()/g' {} +
+          find . -name "build.gradle" -o -name "settings.gradle" | xargs sed -i '/repositories {/a \        google()\n        mavenCentral()'
+          echo "✓ Repositories updated to Google and MavenCentral"
+
+      # 5. FORCE INSTALL GRADLE WRAPPER (Mencegah Gradlew Not Found)
+      - name: Inject Gradle Wrapper
+        run: |
+          # Cari lokasi build.gradle utama
+          PROJECT_ROOT=$(find . -name "build.gradle" -not -path "*/.*" | head -n 1 | xargs dirname)
           
-          if [ -f "./gradlew" ]; then
+          if [ -n "$PROJECT_ROOT" ]; then
+            echo "Project found in: $PROJECT_ROOT"
+            cd "$PROJECT_ROOT"
+            # Paksa buat gradlew baru jika hilang
+            gradle wrapper --gradle-version 8.0
             chmod +x gradlew
-            echo "✓ gradlew ditemukan. Memulai build..."
-            
-            # Menjalankan build APK tipe Release
-            ./gradlew assembleRelease
-            
-            # Pindahkan file APK ke folder output di root
-            find . -name "*-release.apk" -exec cp {} ../fixed_aperture_build/output/aperture-sapphire-signed.apk \;
-            echo "✓ Build sukses. APK tersedia di output."
+            echo "✓ Gradle wrapper injected successfully"
           else
-            echo "❌ ERROR: gradlew TIDAK ditemukan di folder source!"
-            ls -R source/ # Debugging untuk melihat struktur jika gagal
+            echo "❌ ERROR: build.gradle not found in repository!"
             exit 1
           fi
 
-      # 6. PUSH HASIL KE REPOSITORY
+      # 6. BUILD SIGNED APK
+      - name: Build Signed APK
+        run: |
+          GRADLEW_PATH=$(find . -name gradlew | head -n 1)
+          GRADLEW_DIR=$(dirname "$GRADLEW_PATH")
+          cd "$GRADLEW_DIR"
+          
+          # Jalankan Build APK Release
+          ./gradlew assembleRelease --stacktrace
+          
+          # Salin APK ke folder output root
+          find . -name "*-release.apk" -exec cp {} "$GITHUB_WORKSPACE/fixed_aperture_build/output/aperture-sapphire-signed.apk" \;
+          echo "✓ Build Sukses: APK Signed telah dipindahkan ke output"
+
+      # 7. AUTO-PUSH HASIL KE REPOSITORY
       - name: Push Results to Repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
+          # Masukkan folder hasil build dan gradlew baru ke repo
           git add fixed_aperture_build/
-          # Commit hanya jika ada perubahan file
-          git commit -m "Build: Signed APK & Configs Sapphire [skip ci]" || echo "Tidak ada perubahan."
+          git add . # Menyertakan file gradlew jika ada perubahan
+          
+          git commit -m "Build: Signed APK Sapphire with Multi-Lens & Forced Gradle [skip ci]" || echo "No changes"
           git push origin main
+
+      # 8. BACKUP ARTIFACT
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aperture-sapphire-signed-apk
+          path: fixed_aperture_build/output/aperture-sapphire-signed.apk
