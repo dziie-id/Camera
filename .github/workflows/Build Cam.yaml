@@ -17,8 +17,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Mengambil seluruh history untuk memastikan semua file ada
 
-      # 1. SETUP JDK 21 (Diperlukan untuk Android 15/16 Build Tools)
+      # 1. SETUP JDK 21
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -26,11 +28,10 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      # 2. SETUP STRUKTUR & LINEAGEOS AUX CONFIG
+      # 2. SETUP STRUKTUR OUTPUT & AUX CONFIG
       - name: Setup Output & Sapphire Config
         run: |
           mkdir -p fixed_aperture_build/{aux_camera_configs,signing_configs,output}
-          # Konfigurasi khusus LineageOS untuk mendeteksi ID Kamera Vendor Xiaomi
           cat > fixed_aperture_build/aux_camera_configs/org.lineageos.aperture.xml <<EOF
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -38,30 +39,40 @@ jobs:
                   <item>${{ github.event.inputs.package_name }}</item>
               </string-array>
               <string-array name="config_vendor_id_allowlist">
-                  <item>0</item> <item>1</item> <item>2</item> <item>3</item> </string-array>
+                  <item>0</item> <item>1</item> <item>2</item> <item>3</item>
+              </string-array>
           </resources>
           EOF
 
-      # 3. IDENTIFIKASI PROJECT ROOT
+      # 3. IDENTIFIKASI PROJECT ROOT (DIPERBAIKI)
       - name: Identify Project Root
         id: project_info
         run: |
-          REAL_ROOT=$(find . -maxdepth 3 -name "build.gradle" | grep -v "fixed_aperture_build" | head -n 1 | xargs dirname)
+          echo "Searching for build.gradle..."
+          # Mencari build.gradle tanpa batasan maxdepth agar lebih akurat
+          # Mengabaikan folder hasil build kita sendiri
+          SEARCH_RESULT=$(find . -name "build.gradle" | grep -v "fixed_aperture_build" | head -n 1)
+          
+          if [ -z "$SEARCH_RESULT" ]; then
+            echo "❌ ERROR: build.gradle tidak ditemukan di mana pun!"
+            ls -R # List semua file untuk debugging
+            exit 1
+          fi
+          
+          REAL_ROOT=$(dirname "$SEARCH_RESULT")
           echo "ROOT=$REAL_ROOT" >> $GITHUB_OUTPUT
+          echo "✓ Project ditemukan di: $REAL_ROOT"
 
-      # 4. ANDROID 16 QPR2 SMART PATCHER
-      - name: Patch for Android 16 & LineageOS Base
+      # 4. PATCH ANDROID 16 & FIX SDK
+      - name: Patch for Android 16
         run: |
-          cd ${{ steps.project_info.outputs.ROOT }}
-          # Update ke SDK 35/Bakcup 36 (Android 16 Ready)
+          cd "${{ steps.project_info.outputs.ROOT }}"
+          # Update SDK ke 35 (Android 16 Ready)
           find . -name "*.gradle" -exec sed -i 's/compileSdkVersion [0-9]*/compileSdkVersion 35/g' {} +
           find . -name "*.gradle" -exec sed -i 's/targetSdkVersion [0-9]*/targetSdkVersion 35/g' {} +
           
-          # Inject LineageOS specific features & Bypass strict restrictions
+          # Force buildConfig dan ignore lint
           find . -name "*.gradle" -exec sed -i '/android {/a \    buildFeatures { buildConfig true }\n    lintOptions { checkReleaseBuilds false; abortOnError false }' {} +
-          
-          # Fix untuk namespace yang sering bermasalah di build Android terbaru
-          find . -name "AndroidManifest.xml" -exec sed -i 's/package=".*"/package="${{ github.event.inputs.package_name }}"/g' {} +
 
       # 5. GENERATE KEYSTORE
       - name: Generate Keystore
@@ -73,47 +84,50 @@ jobs:
             -dname "CN=Aperture, OU=LineageOS, O=CustomROM, L=Jakarta, C=ID" \
             -storepass password123 -keypass password123
 
-      # 6. INJECT GRADLE WRAPPER (Gradle 8.7+ untuk Java 21)
-      - name: Inject Gradle 8.7
+      # 6. INJECT GRADLE WRAPPER
+      - name: Inject Gradle
         run: |
-          cd ${{ steps.project_info.outputs.ROOT }}
-          gradle wrapper --gradle-version 8.7
+          cd "${{ steps.project_info.outputs.ROOT }}"
+          # Menggunakan Gradle 8.10 (terbaru & stabil untuk JDK 21)
+          gradle wrapper --gradle-version 8.10
           chmod +x gradlew
 
       # 7. BUILD RELEASE APK
       - name: Build APK
         run: |
-          cd ${{ steps.project_info.outputs.ROOT }}
+          cd "${{ steps.project_info.outputs.ROOT }}"
           ./gradlew assembleRelease --stacktrace
 
-      # 8. ZIPALIGN & SIGN (Targeting V2/V3/V4 Signing Scheme)
-      - name: Optimize & Sign for Android 16
+      # 8. ZIPALIGN & SIGN V4 (Android 16 Standard)
+      - name: Optimize & Sign
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
-          RAW_APK=$(find ${{ steps.project_info.outputs.ROOT }} -name "*-release.apk" | head -n 1)
+          RAW_APK=$(find "${{ steps.project_info.outputs.ROOT }}" -name "*-release.apk" | head -n 1)
           
-          # Alignment
+          if [ -z "$RAW_APK" ]; then
+            echo "❌ ERROR: APK tidak ditemukan setelah build!"
+            exit 1
+          fi
+          
           $BUILD_TOOLS_DIR/zipalign -v 4 "$RAW_APK" fixed_aperture_build/output/aligned.apk
-          
-          # Sign dengan skema V4 (Wajib untuk Android versi terbaru)
           $BUILD_TOOLS_DIR/apksigner sign --ks fixed_aperture_build/signing_configs/release.keystore \
             --ks-key-alias aperture_key --ks-pass pass:password123 --key-pass pass:password123 \
             --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled true \
-            --out fixed_aperture_build/output/Aperture-Sapphire-Android16-QPR2.apk \
+            --out fixed_aperture_build/output/Aperture-Sapphire-A16.apk \
             fixed_aperture_build/output/aligned.apk
 
       # 9. PUSH & ARTIFACT
-      - name: Push and Upload
+      - name: Push Results
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           rm -f fixed_aperture_build/output/aligned.apk
-          git add fixed_aperture_build/
-          git commit -m "Build: Aperture for Android 16 QPR2 [skip ci]" || echo "No changes"
+          git add .
+          git commit -m "Build: Aperture for Android 16 [skip ci]" || echo "No changes"
           git push origin main
       
       - name: Final Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Aperture-Sapphire-A16
-          path: fixed_aperture_build/output/Aperture-Sapphire-Android16-QPR2.apk
+          path: fixed_aperture_build/output/Aperture-Sapphire-A16.apk
