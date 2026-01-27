@@ -1,4 +1,3 @@
----
 name: Fix Build Configuration Step by Step
 
 on:
@@ -9,6 +8,7 @@ on:
         required: true
         default: 'all'
         type: choice
+          - 'all'
         options:
           - 'setup'
           - 'manifest'
