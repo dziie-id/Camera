@@ -1,0 +1,7 @@
+<camera-config>
+  <sensors>
+    <sensor id="0" type="back" name="IMX582" />
+    <sensor id="1" type="front" name="OV13B10" />
+    <sensor id="2" type="aux" name="GC02M1" purpose="macro" />
+  </sensors>
+</camera-config>
