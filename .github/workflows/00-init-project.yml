@@ -1,0 +1,92 @@
+name: INIT Android Camera Project
+
+on:
+  workflow_dispatch:
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate Android Project
+        run: |
+          mkdir -p app/src/main/java/org/lineageos/aperture
+          mkdir -p app/src/main/res
+
+          cat > settings.gradle <<EOF
+          rootProject.name = "CameraWrapper"
+          include(":app")
+          EOF
+
+          cat > build.gradle <<EOF
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath "com.android.tools.build:gradle:8.2.2"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+
+          cat > app/build.gradle <<EOF
+          plugins {
+              id "com.android.application"
+          }
+
+          android {
+              namespace "org.lineageos.aperture"
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId "org.lineageos.aperture"
+                  minSdk 26
+                  targetSdk 34
+                  versionCode 36
+                  versionName "16"
+              }
+
+              buildTypes {
+                  release {
+                      minifyEnabled false
+                  }
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<EOF
+          <manifest package="org.lineageos.aperture"
+              xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <application
+                  android:label="Camera"
+                  android:allowBackup="false"
+                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+              </application>
+          </manifest>
+          EOF
+
+      - name: Commit generated project
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "init android camera project"
+          git push
