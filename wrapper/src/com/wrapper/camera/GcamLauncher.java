@@ -2,31 +2,29 @@ package com.wrapper.camera;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.net.Uri;
+import android.provider.MediaStore;
 
 public class GcamLauncher {
 
-    // SESUAIKAN DENGAN SGCAM LO
     private static final String GCAM_PACKAGE =
             "com.google.android.GoogleCameraEng";
 
     private static final String GCAM_ACTIVITY =
             "com.google.android.apps.camera.CameraActivity";
 
-    public static Intent buildIntent(Activity activity, float zoom) {
+    public static Intent buildIntent(Activity activity, float zoom, Uri output) {
         Intent intent = new Intent();
         intent.setClassName(GCAM_PACKAGE, GCAM_ACTIVITY);
 
-        // DIRECT PHOTO MODE
         intent.putExtra("com.google.android.apps.camera.extra.CAPTURE_MODE", "photo");
-
-        // HARDCODE ZOOM
         intent.putExtra("com.google.android.apps.camera.extra.ZOOM", zoom);
-
-        // SILENT MODE
         intent.putExtra("android.intent.extra.SILENT_MODE", true);
-
-        // MEDIUM QUALITY
         intent.putExtra("android.intent.extra.QUALITY", 85);
+
+        // TEMP OUTPUT (CACHE)
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, output);
+        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
         return intent;
     }
