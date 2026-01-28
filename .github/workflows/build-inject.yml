@@ -1,0 +1,93 @@
+name: Build GCam Go (Anti Double Capture)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      JAVA_OPTS: "-Xmx6g"
+
+    steps:
+    # 1️⃣ Checkout repo
+    - uses: actions/checkout@v4
+
+    # 2️⃣ Setup Java
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 17
+
+    # 3️⃣ Setup Android SDK
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    # 4️⃣ Install apktool
+    - name: Install apktool
+      run: |
+        sudo apt update
+        sudo apt install -y apktool unzip wget
+
+    # 5️⃣ Download GCam Go
+    - name: Download GCam Go
+      run: |
+        mkdir base
+        wget -O base/GCamGo.apk \
+          https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_ENG.apk
+
+    # 6️⃣ Decode APK
+    - name: Decode APK
+      run: |
+        apktool d base/GCamGo.apk -o work --force
+
+    # 7️⃣ Inject smali anti double intent
+    - name: Patch smali (anti double capture)
+      run: |
+        TARGET=$(grep -rl "onCreate(Landroid/os/Bundle;)V" work/smali | head -n 1)
+        echo "Patching $TARGET"
+
+        # Tambah static flag di class
+        sed -i '/\.super/a\
+        .field private static sLaunched:Z' "$TARGET"
+
+        # Inject guard tepat setelah invoke-super
+        sed -i '/invoke-super .*onCreate/a\
+        sget-boolean v0, Lcom/google/android/apps/camera/CameraActivity;->sLaunched:Z\n\
+        if-nez v0, :already_launched\n\
+        const/4 v0, 0x1\n\
+        sput-boolean v0, Lcom/google/android/apps/camera/CameraActivity;->sLaunched:Z' "$TARGET"
+
+        # Tambah label aman SEBELUM kode lanjutan
+        sed -i '/\.locals/a\
+        :already_launched' "$TARGET"
+    # 8️⃣ Rebuild APK
+    - name: Build unsigned APK
+      run: |
+        export APKTOOL_OPTS="-Xmx6g"
+        apktool b work -o Camera-unsigned.apk
+
+    # 9️⃣ Sign APK
+    - name: Sign APK
+      run: |
+        BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
+        $ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner sign \
+          --key keystore/Key.pk8 \
+          --cert keystore/Key.x509.pem \
+          --out Camera.apk \
+          Camera-unsigned.apk
+
+    # 🔟 Create tag
+    - name: Create tag
+      run: |
+        TAG="v$(date +%Y%m%d-%H%M%S)"
+        git tag $TAG
+        git push origin $TAG
+
+    # 1️⃣1️⃣ Release
+    - name: Upload Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: Camera.apk
