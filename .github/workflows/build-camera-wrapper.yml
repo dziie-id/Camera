@@ -35,11 +35,9 @@ jobs:
         sudo apt update
         sudo apt install -y wget unzip apksigner
 
-    - name: Download Apktool (official)
+    - name: Download Apktool (release)
       run: |
-         wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
-         wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool.jar
-         chmod +x apktool
+          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O apktool.jar
 
     - name: Prepare workspace
       run: |
@@ -49,8 +47,8 @@ jobs:
     - name: Decompile Camera APK
       run: |
         cd work
-        java -jar ../apktool.jar d Camera.apk -o cam_src
-
+        java -jar apktool.jar d Camera.apk -o cam_src
+        
     - name: Patch AndroidManifest
       run: |
         cd work/cam_src
@@ -70,7 +68,7 @@ jobs:
     - name: Build APK
       run: |
         cd work
-        java -jar ../apktool.jar b cam_src -o Camera-Wrapper-unsigned.apk
+        java -jar apktool.jar b cam_src -o Camera-Wrapper-unsigned.apk
 
     - name: Sign APK
       run: |
