@@ -1,5 +1,8 @@
 package org.lineageos.aperture;
 
+import android.content.Context;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.widget.ImageButton;
@@ -26,6 +29,9 @@ public class CameraActivity extends AppCompatActivity {
     private ImageCapture imageCapture;
     private ExecutorService cameraExecutor;
 
+    private boolean useUltraWide = false;
+    private String ultraWideCameraId = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -33,11 +39,54 @@ public class CameraActivity extends AppCompatActivity {
 
         previewView = findViewById(R.id.previewView);
         ImageButton shutter = findViewById(R.id.btnShutter);
+        ImageButton zoom = findViewById(R.id.btnZoom);
 
         cameraExecutor = Executors.newSingleThreadExecutor();
+
+        detectUltraWideCamera();
         startCamera();
 
+        zoom.setOnClickListener(v -> {
+            useUltraWide = !useUltraWide;
+            startCamera();
+        });
+
         shutter.setOnClickListener(v -> takePhoto());
+    }
+
+    /**
+     * Deteksi kamera UltraWide (focal length terkecil)
+     */
+    private void detectUltraWideCamera() {
+        try {
+            CameraManager manager =
+                    (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+
+            for (String cameraId : manager.getCameraIdList()) {
+                CameraCharacteristics chars =
+                        manager.getCameraCharacteristics(cameraId);
+
+                Float[] focalLengths =
+                        chars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+
+                Integer facing =
+                        chars.get(CameraCharacteristics.LENS_FACING);
+
+                if (facing != null
+                        && facing == CameraCharacteristics.LENS_FACING_BACK
+                        && focalLengths != null
+                        && focalLengths.length > 0) {
+
+                    // UW biasanya focal < 2.0
+                    if (focalLengths[0] < 2.0f) {
+                        ultraWideCameraId = cameraId;
+                        break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void startCamera() {
@@ -55,9 +104,26 @@ public class CameraActivity extends AppCompatActivity {
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                         .build();
 
-                CameraSelector selector = new CameraSelector.Builder()
-                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                        .build();
+                CameraSelector selector;
+
+                if (useUltraWide && ultraWideCameraId != null) {
+                    selector = new CameraSelector.Builder()
+                            .addCameraFilter(cameras -> {
+                                for (var camera : cameras) {
+                                    if (camera.getCameraInfo()
+                                            .getCameraId()
+                                            .equals(ultraWideCameraId)) {
+                                        return java.util.Collections.singletonList(camera);
+                                    }
+                                }
+                                return cameras;
+                            })
+                            .build();
+                } else {
+                    selector = new CameraSelector.Builder()
+                            .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                            .build();
+                }
 
                 cameraProvider.unbindAll();
                 cameraProvider.bindToLifecycle(
