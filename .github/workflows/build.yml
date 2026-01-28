@@ -1,0 +1,79 @@
+name: Build Camera Wrapper
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # =========================
+      # 1. Checkout
+      # =========================
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # =========================
+      # 2. Setup Java 17
+      # =========================
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Check Java
+        run: java -version
+
+      # =========================
+      # 3. Download apktool
+      # =========================
+      - name: Download apktool
+        run: |
+          wget -O apktool.jar https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool.jar
+          java -jar apktool.jar --version
+
+      # =========================
+      # 4. Prepare work dir
+      # =========================
+      - name: Prepare work directory
+        run: |
+          mkdir -p work
+          cp -r wrapper work/camera
+          ls -lah work/camera
+
+      # =========================
+      # 5. Build APK (apktool)
+      # =========================
+      - name: Build APK
+        run: |
+          cd work
+          java -jar ../apktool.jar b camera -o Camera-unsigned.apk
+
+      # =========================
+      # 6. Sign APK (custom keystore)
+      # =========================
+      - name: Sign APK
+        run: |
+          cd work
+          openssl pkcs8 -topk8 -inform PEM -outform DER \
+            -in ../keystore/Key.pk \
+            -out key.pk8 -nocrypt
+
+          java -jar ../apktool.jar sign \
+            --key key.pk8 \
+            --cert ../keystore/Key.x509.pem \
+            Camera-unsigned.apk
+
+          mv Camera-unsigned.apk Camera-wrapper-signed.apk
+
+      # =========================
+      # 7. Upload Artifact
+      # =========================
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Camera-Wrapper-APK
+          path: work/Camera-wrapper-signed.apk
