@@ -59,3 +59,33 @@ jobs:
         with:
           name: camera-unsigned
           path: Camera-unsigned.apk
+
+          # STEP 8 — Setup Android SDK Build-Tools (for apksigner)
+      - name: Setup Android SDK Build-Tools
+        uses: android-actions/setup-android@v3
+
+      # STEP 9 — Sign APK (platform key style)
+      - name: Sign APK
+        run: |
+          BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
+          $ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner sign \
+            --key keystore/Key.pk8 \
+            --cert keystore/Key.x509.pem \
+            --out Camera.apk \
+            Camera-unsigned.apk
+
+          echo "Signed APK:"
+          ls -lh Camera.apk
+
+      # STEP 10 — Create Git tag (required for Release)
+      - name: Create tag
+        run: |
+          TAG="v$(date +%Y%m%d-%H%M%S)"
+          git tag $TAG
+          git push origin $TAG
+
+      # STEP 11 — Upload to GitHub Release
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Camera.apk
