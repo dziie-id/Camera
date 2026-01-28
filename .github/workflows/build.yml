@@ -1,7 +1,6 @@
-name: Build Camera Wrapper
+name: Build Camera Wrapper (Manual)
 
 on:
-  push:
   workflow_dispatch:
 
 jobs:
@@ -10,7 +9,7 @@ jobs:
 
     steps:
       # =========================
-      # 1. Checkout
+      # 1. Checkout repo
       # =========================
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -28,11 +27,12 @@ jobs:
         run: java -version
 
       # =========================
-      # 3. Download apktool
+      # 3. Download apktool (FIX)
       # =========================
       - name: Download apktool
         run: |
-          wget -O apktool.jar https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool.jar
+          wget -O apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar
+          ls -lah apktool.jar
           java -jar apktool.jar --version
 
       # =========================
@@ -45,7 +45,7 @@ jobs:
           ls -lah work/camera
 
       # =========================
-      # 5. Build APK (apktool)
+      # 5. Build APK
       # =========================
       - name: Build APK
         run: |
@@ -53,11 +53,12 @@ jobs:
           java -jar ../apktool.jar b camera -o Camera-unsigned.apk
 
       # =========================
-      # 6. Sign APK (custom keystore)
+      # 6. Sign APK
       # =========================
       - name: Sign APK
         run: |
           cd work
+
           openssl pkcs8 -topk8 -inform PEM -outform DER \
             -in ../keystore/Key.pk \
             -out key.pk8 -nocrypt
