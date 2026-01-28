@@ -2,10 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.lineageos.aperture">
 
-    <!-- Permission wajib -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- Feature kamera -->
     <uses-feature
         android:name="android.hardware.camera"
         android:required="true" />
@@ -19,22 +17,20 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- Activity Kamera Utama -->
         <activity
             android:name=".CameraActivity"
             android:exported="true"
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize"
-            android:hardwareAccelerated="true"
-            android:windowSoftInputMode="stateAlwaysHidden">
+            android:hardwareAccelerated="true">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
 
-        <!-- FileProvider (foto ke cache, bukan internal) -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"
