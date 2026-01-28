@@ -57,9 +57,14 @@ jobs:
       # =========================
       # STEP 5: INSTALL APKTOOL
       # =========================
-      - name: Install Apktool
+      - name: Download Apktool JAR
         run: |
-          wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
+          mkdir -p tools
+          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O tools/apktool.jar
+
+      - name: Verify Apktool
+        run: |
+          java -jar tools/apktool.jar --version
 
 
       # =========================
