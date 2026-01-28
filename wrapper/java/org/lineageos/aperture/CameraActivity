@@ -1,5 +1,11 @@
 package org.lineageos.aperture;
 
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.media.Image;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -8,10 +14,10 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
-import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
+import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
@@ -19,17 +25,16 @@ import androidx.core.content.ContextCompat;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class CameraActivity extends AppCompatActivity {
 
     private PreviewView previewView;
     private ImageCapture imageCapture;
     private CameraControl cameraControl;
-    private CameraInfo cameraInfo;
-
-    private ExecutorService cameraExecutor;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,8 +42,6 @@ public class CameraActivity extends AppCompatActivity {
         setContentView(R.layout.activity_camera);
 
         previewView = findViewById(R.id.previewView);
-
-        cameraExecutor = Executors.newSingleThreadExecutor();
 
         startCamera();
 
@@ -77,7 +80,6 @@ public class CameraActivity extends AppCompatActivity {
                 );
 
                 cameraControl = camera.getCameraControl();
-                cameraInfo = camera.getCameraInfo();
 
                 // default 1x
                 switchToNormal();
@@ -88,20 +90,18 @@ public class CameraActivity extends AppCompatActivity {
         }, ContextCompat.getMainExecutor(this));
     }
 
-    // ===== ZOOM LOGIC =====
+    /* ================= ZOOM ================= */
 
     private void switchToWide() {
         if (cameraControl != null) {
-            // biasanya UW
-            cameraControl.setLinearZoom(0.0f);
+            cameraControl.setLinearZoom(0.0f); // biasanya UW
         }
         updateZoomUI(true);
     }
 
     private void switchToNormal() {
         if (cameraControl != null) {
-            // biasanya main camera
-            cameraControl.setLinearZoom(0.5f);
+            cameraControl.setLinearZoom(0.5f); // main cam
         }
         updateZoomUI(false);
     }
@@ -113,13 +113,12 @@ public class CameraActivity extends AppCompatActivity {
         btnWide.setBackgroundResource(
                 wideActive ? R.drawable.bg_zoom_button_active : R.drawable.bg_zoom_button
         );
-
         btnNormal.setBackgroundResource(
                 wideActive ? R.drawable.bg_zoom_button : R.drawable.bg_zoom_button_active
         );
     }
 
-    // ===== SHUTTER =====
+    /* ================= SHUTTER ================= */
 
     public void takePicture(View view) {
         if (imageCapture == null) return;
@@ -127,11 +126,16 @@ public class CameraActivity extends AppCompatActivity {
         imageCapture.takePicture(
                 ContextCompat.getMainExecutor(this),
                 new ImageCapture.OnImageCapturedCallback() {
+
                     @Override
-                    public void onCaptureSuccess(@NonNull androidx.camera.core.ImageProxy image) {
-                        // FOTO LANGSUNG KE APLIKASI
-                        // TIDAK DISIMPAN KE STORAGE
-                        image.close();
+                    public void onCaptureSuccess(@NonNull ImageProxy imageProxy) {
+                        Image image = imageProxy.getImage();
+                        if (image != null) {
+                            Bitmap bitmap = imageToBitmap(image);
+                            Bitmap result = applyWatermark(bitmap);
+                            image.close();
+                        }
+                        imageProxy.close();
                     }
 
                     @Override
@@ -142,9 +146,35 @@ public class CameraActivity extends AppCompatActivity {
         );
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        cameraExecutor.shutdown();
+    /* ================= WATERMARK ================= */
+
+    private Bitmap imageToBitmap(Image image) {
+        ByteBuffer buffer = image.getPlanes()[0].getBuffer();
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        return android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+    }
+
+    private Bitmap applyWatermark(Bitmap source) {
+        Bitmap result = source.copy(Bitmap.Config.ARGB_8888, true);
+        Canvas canvas = new Canvas(result);
+
+        String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
+        String date = new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(new Date());
+        String text = time + "  |  " + date;
+
+        Paint paint = new Paint();
+        paint.setColor(Color.WHITE);
+        paint.setAntiAlias(true);
+        paint.setTypeface(Typeface.DEFAULT_BOLD);
+        paint.setTextSize(source.getWidth() * 0.035f);
+        paint.setShadowLayer(4f, 2f, 2f, Color.BLACK);
+
+        float textWidth = paint.measureText(text);
+        float x = source.getWidth() - textWidth - (source.getWidth() * 0.04f);
+        float y = source.getHeight() - (source.getHeight() * 0.04f);
+
+        canvas.drawText(text, x, y, paint);
+        return result;
     }
 }
