@@ -1,0 +1,86 @@
+name: Build Camera Wrapper
+
+on:
+  workflow_dispatch:
+    inputs:
+      PACKAGE_NAME:
+        description: "Package name (contoh: org.lineageos.aperture)"
+        required: true
+        default: "org.lineageos.aperture"
+      VERSION_NAME:
+        description: "Version name"
+        required: true
+        default: "16"
+      VERSION_CODE:
+        description: "Version code"
+        required: true
+        default: "36"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Setup Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 17
+
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y wget unzip apksigner
+
+    - name: Download Apktool
+      run: |
+        wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar
+        mv apktool_2.9.3.jar apktool.jar
+
+    - name: Prepare workspace
+      run: |
+        mkdir work
+        cp *.apk work/ || true
+
+    - name: Decompile Camera APK
+      run: |
+        cd work
+        java -jar ../apktool.jar d Camera.apk -o cam_src
+
+    - name: Patch AndroidManifest
+      run: |
+        cd work/cam_src
+        sed -i "s/package=\"[^\"]*\"/package=\"${{ github.event.inputs.PACKAGE_NAME }}\"/" AndroidManifest.xml
+        sed -i "s/android:versionName=\"[^\"]*\"/android:versionName=\"${{ github.event.inputs.VERSION_NAME }}\"/" AndroidManifest.xml
+        sed -i "s/android:versionCode=\"[^\"]*\"/android:versionCode=\"${{ github.event.inputs.VERSION_CODE }}\"/" AndroidManifest.xml
+
+    - name: Inject Wrapper XML
+      run: |
+        cd work/cam_src
+        mkdir -p res/layout res/values res/xml res/drawable
+        cp -r ../../wrapper/layout/* res/layout/
+        cp -r ../../wrapper/values/* res/values/
+        cp -r ../../wrapper/xml/* res/xml/
+        cp -r ../../wrapper/drawable/* res/drawable/
+
+    - name: Build APK
+      run: |
+        cd work
+        java -jar ../apktool.jar b cam_src -o Camera-Wrapper-unsigned.apk
+
+    - name: Sign APK
+      run: |
+        apksigner sign \
+          --key keystore/Key.pk \
+          --cert keystore/Key.x509.pem \
+          work/Camera-Wrapper-unsigned.apk
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Camera-Wrapper-APK
+        path: work/Camera-Wrapper-unsigned.apk
+        
