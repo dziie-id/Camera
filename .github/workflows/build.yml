@@ -33,9 +33,10 @@ jobs:
             -d out/classes \
             app/WrapperActivity.java
 
-      - name: Convert to dex
+      - name: Convert class to dex
         run: |
-          d8 out/classes --output out
+          find out/classes -name "*.class" > classes.list
+          d8 @classes.list --output out
 
       - name: Build unsigned APK
         run: |
