@@ -46,8 +46,8 @@ jobs:
 
     - name: Decompile Camera APK
       run: |
-        cd work
-        java -jar apktool.jar d Camera.apk -o cam_src
+        mkdir -p work
+        java -jar apktool.jar d Camera.apk -o work/cam_src
         
     - name: Patch AndroidManifest
       run: |
@@ -67,8 +67,8 @@ jobs:
 
     - name: Build APK
       run: |
-        cd work
-        java -jar apktool.jar b cam_src -o Camera-Wrapper-unsigned.apk
+        java -jar apktool.jar b work/cam_src -o work/Camera-Wrapper-unsigned.apk
+
 
     - name: Sign APK
       run: |
