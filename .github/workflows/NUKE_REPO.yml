@@ -1,0 +1,61 @@
+name: 🔥 NUKE REPOSITORY
+
+on:
+  workflow_dispatch:
+
+jobs:
+  nuke:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 💣 Remove all files except keystore & NUKE workflow
+        run: |
+          shopt -s extglob
+
+          echo "== Cleaning root =="
+          rm -rf !(keystore|.github)
+
+          echo "== Cleaning workflows (keep NUKE only) =="
+          find .github/workflows -type f ! -name 'NUKE_REPO.yml' -delete
+
+          echo "== Result =="
+          git status
+
+      - name: 🔥 Commit nuked state
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "🔥 NUKE: wipe repo, keep keystore & NUKE workflow" || echo "Nothing to commit"
+          git push origin HEAD
+
+      - name: 🧨 Delete ALL workflow runs (history)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          repo="${{ github.repository }}"
+          runs=$(gh api repos/$repo/actions/runs --paginate -q '.workflow_runs[].id')
+          for run in $runs; do
+            echo "Deleting run $run"
+            gh api -X DELETE repos/$repo/actions/runs/$run
+          done
+
+      - name: 🗑 Delete ALL artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          repo="${{ github.repository }}"
+          artifacts=$(gh api repos/$repo/actions/artifacts --paginate -q '.artifacts[].id')
+          for art in $artifacts; do
+            echo "Deleting artifact $art"
+            gh api -X DELETE repos/$repo/actions/artifacts/$art
+          done
+          
