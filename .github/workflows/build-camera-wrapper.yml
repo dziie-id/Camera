@@ -35,10 +35,11 @@ jobs:
         sudo apt update
         sudo apt install -y wget unzip apksigner
 
-    - name: Download Apktool
+    - name: Download Apktool (official)
       run: |
-        wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar
-        mv apktool_2.9.3.jar apktool.jar
+         wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+         wget https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool.jar
+         chmod +x apktool
 
     - name: Prepare workspace
       run: |
