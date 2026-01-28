@@ -83,9 +83,71 @@ class MainActivity : AppCompatActivity() {
         imageCapture.takePicture(outputOptions, ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    // Di sini nanti proses Watermark disisipkan ke Bitmap
-                    // Karena ente minta standard, hasil save CameraX sudah cukup tajam
-                }
+    val savedUri = Uri.fromFile(photoFile)
+    applyWatermark(photoFile)
+}
+
+private fun applyWatermark(file: File) {
+    // 1. Decode bitmap dari hasil foto
+    val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+    val mutableBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
+    val canvas = Canvas(mutableBitmap)
+
+    // 2. Siapkan Data Teks (Jam | Tanggal Bulan Tahun)
+    val sdf = SimpleDateFormat("HH:mm | dd MMMM yyyy", Locale.getDefault())
+    val dateTime = sdf.format(Date())
+
+    // 3. Konfigurasi Ukuran Proposional (Misal 2% dari tinggi gambar)
+    val textSize = mutableBitmap.height * 0.025f
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.textSize = textSize
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        style = Paint.Style.FILL
+    }
+
+    // 4. Hitung Posisi (Pojok Kanan Bawah)
+    val margin = textSize 
+    val xPos = mutableBitmap.width - paint.measureText(dateTime) - margin
+    val yPos = mutableBitmap.height - margin
+
+    // 5. AUTO ADJUST WARNA (Luminance Analysis)
+    // Kita cek sample warna di area watermark akan diletakkan
+    val sampleSize = 20
+    val checkX = xPos.toInt().coerceIn(0, mutableBitmap.width - sampleSize)
+    val checkY = yPos.toInt().coerceIn(0, mutableBitmap.height - sampleSize)
+    
+    val pixel = mutableBitmap.getPixel(checkX, checkY)
+    val r = Color.red(pixel)
+    val g = Color.green(pixel)
+    val b = Color.blue(pixel)
+    
+    // Rumus Luminance: 0.299R + 0.587G + 0.114B
+    val luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    
+    if (luminance > 0.5) {
+        paint.color = Color.BLACK // Gambar terang, teks hitam
+        paint.setShadowLayer(2f, 1f, 1f, Color.WHITE) // Tipis aja biar kebaca
+    } else {
+        paint.color = Color.WHITE // Gambar gelap, teks putih
+        paint.setShadowLayer(2f, 1f, 1f, Color.BLACK)
+    }
+
+    // 6. Gambar Teks ke Canvas
+    canvas.drawText(dateTime, xPos, yPos, paint)
+
+    // 7. Simpan Kembali ke File
+    try {
+        val out = FileOutputStream(file)
+        mutableBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out)
+        out.flush()
+        out.close()
+        bitmap.recycle()
+        mutableBitmap.recycle()
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+}
+
                 override fun onError(exc: ImageCaptureException) {}
             })
         
