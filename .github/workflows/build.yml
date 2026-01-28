@@ -1,0 +1,43 @@
+name: Build Camera APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Build unsigned APK (aapt)
+      run: |
+        mkdir out
+        aapt package -f \
+          -M app/AndroidManifest.xml \
+          -S app/res \
+          -I $ANDROID_HOME/platforms/android-34/android.jar \
+          -F out/Camera-unsigned.apk
+
+    - name: Zipalign
+      run: |
+        zipalign -f 4 out/Camera-unsigned.apk out/Camera-aligned.apk
+
+    - name: Sign APK
+      run: |
+        apksigner sign \
+          --key keystore/Key_20260125_203517.pk8 \
+          --cert keystore/Key_20260125_203517.x509.pem \
+          --out out/Camera.apk \
+          out/Camera-aligned.apk
+
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v16
+        name: Camera v16
+        files: out/Camera.apk
