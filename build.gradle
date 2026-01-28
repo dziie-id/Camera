@@ -4,9 +4,9 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // Pake versi ini biar sinkron sama Gradle 8.2
-        classpath 'com.android.tools.build:gradle:8.2.1'
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22"
+        // Versi 8.1.0 ini sangat stabil untuk Gradle 8.2 ke bawah
+        classpath 'com.android.tools.build:gradle:8.1.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.20"
     }
 }
 
