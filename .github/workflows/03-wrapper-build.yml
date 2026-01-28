@@ -42,7 +42,10 @@ jobs:
           --out out/Camera.apk \
           out/Camera-unsigned.apk
 
-      - name: Release
+      - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          files: Camera.apk
+          tag_name: v${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}
+          name: Camera Wrapper v${{ env.VERSION_NAME }} (${{
+            env.VERSION_CODE }})
+          files: out/Camera.apk
