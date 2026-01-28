@@ -1,24 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.lineageos.aperture">
 
+    <uses-feature android:name="android.hardware.camera.any" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <application
         android:label="Camera"
-        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+        android:exported="true">
 
-        <!-- MAIN / 1x (default) -->
         <activity
-            android:name=".CameraWrapperActivity"
+            android:name=".CameraActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.media.action.IMAGE_CAPTURE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-
-        <!-- UW (dipanggil manual) -->
-        <activity
-            android:name=".UltraWideActivity"
-            android:exported="false" />
 
     </application>
 </manifest>
