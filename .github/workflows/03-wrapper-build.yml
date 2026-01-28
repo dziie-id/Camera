@@ -1,51 +1,86 @@
-name: Build Camera Wrapper
+name: Step 3 - Build & Release Camera Wrapper
 
 on:
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Version Name (default 16)"
+        required: false
+        default: "16"
+      version_code:
+        description: "Version Code (default 36)"
+        required: false
+        default: "36"
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      VERSION_NAME: ${{ inputs.version_name }}
+      VERSION_CODE: ${{ inputs.version_code }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Compile Java
+      # ===============================
+      # BUILD APK (PAKAI APKTOOL AMAN)
+      # ===============================
+      - name: Build unsigned APK
         run: |
-          mkdir -p out/classes
-          javac \
-            -source 8 -target 8 \
-            -classpath $ANDROID_HOME/platforms/android-34/android.jar \
-            -d out/classes \
-            app/src/org/lineageos/aperture/WrapperActivity.java
+          sudo apt update
+          sudo apt install -y apktool
 
-      - name: Convert to DEX
-        run: |
-          d8 $(find out/classes -name "*.class") --output out
+          export JAVA_OPTS="-Xmx6g"
 
-      - name: Package APK
-        run: |
-          $ANDROID_HOME/build-tools/34.0.0/aapt2 link \
-          -o out/Camera-unsigned.apk \
-          -I $ANDROID_HOME/platforms/android-34/android.jar \
-          --manifest app/AndroidManifest.xml \
-          --auto-add-overlay
+          apktool b app -o Camera-unsigned.apk
 
+      # ===============================
+      # SIGN APK (KEY DARI REPO)
+      # ===============================
       - name: Sign APK
         run: |
-          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
-          --key keystore/Key.pk8 \
-          --cert keystore/Key.x509.pem \
-          --out out/Camera.apk \
-          out/Camera-unsigned.apk
+          BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
+          APKSIGNER=$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner
 
+          $APKSIGNER sign \
+            --key keystore/Key.pk8 \
+            --cert keystore/Key.x509.pem \
+            --out Camera.apk \
+            Camera-unsigned.apk
+
+      # ===============================
+      # CREATE TAG (ANTI LOOP)
+      # ===============================
+      - name: Create git tag (safe)
+        run: |
+          TAG="v${VERSION_NAME}-${VERSION_CODE}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag already exists, skip"
+          else
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      # ===============================
+      # RELEASE
+      # ===============================
       - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}
-          name: Camera Wrapper v${{ env.VERSION_NAME }} (${{
-            env.VERSION_CODE }})
-          files: out/Camera.apk
+          name: Camera Wrapper v${{ env.VERSION_NAME }} (${{ env.VERSION_CODE }})
+          files: Camera.apk
