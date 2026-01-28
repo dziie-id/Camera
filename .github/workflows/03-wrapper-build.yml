@@ -31,16 +31,20 @@ jobs:
             app/src/org/lineageos/aperture/WrapperActivity.java
 
       # 3.2 Convert .class → classes.dex
-      - name: D8 to classes.dex (FIX)
+      - name: Step 3 - Convert class to classes.dex
         run: |
+          # Cari build-tools terbaru
           BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
+          D8=$ANDROID_HOME/build-tools/$BUILD_TOOLS/d8
 
-          cd out/classes
-          zip -r ../classes.jar .
-          cd ../..
+          echo "Using build-tools: $BUILD_TOOLS"
 
-          $ANDROID_HOME/build-tools/$BUILD_TOOLS/d8 \
-            out/classes.jar \
+          # Pastikan input ada
+          ls -R out/classes
+
+          # Convert .class → classes.dex
+          $D8 \
+            out/classes \
             --output app
 
       # 3.3 Build unsigned APK
@@ -52,8 +56,7 @@ jobs:
           $AAPT2 compile --dir app/res -o out/res.zip
 
           $AAPT2 link \
-            -o Camera-unsigned.apk \
-            --manifest app/AndroidManifest.xml \
-            -I $ANDROID_HOME/platforms/android-34/android.jar \
-            out/res.zip \
-            app/classes.dex
+          -o out/Camera-unsigned.apk \
+          --manifest app/AndroidManifest.xml \
+          -I $ANDROID_JAR \
+          out/res.zip
