@@ -19,35 +19,41 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # STEP 2 — Install apktool (minimal dependency)
+      # STEP 2 — Install apktool (dependency minimal)
       - name: Install apktool
         run: |
           sudo apt update
           sudo apt install -y apktool
 
-      # STEP 3 — Download GCam Go (TIDAK disimpan ke repo)
+      # STEP 3 — Download GCam Go (langsung dari Celso)
       - name: Download GCam Go APK
         run: |
           mkdir -p base
-          curl -L -o base/GCamGo.apk https://github.com/dziie-id/Camera/releases/download/base/GCamGo.apk
+          curl -L \
+            "https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_ENG.apk" \
+            -o base/GCamGo.apk
+          ls -lh base/GCamGo.apk
 
       # STEP 4 — Decode APK
       - name: Decode GCam Go
         run: |
           apktool d base/GCamGo.apk -o work
 
-      # STEP 5 — (OPSIONAL) Tempat mod / wrapper
-      - name: Info decoded content
+      # STEP 5 — Info (debug ringan)
+      - name: Check decoded structure
         run: |
-          echo "Decoded folders:"
+          echo "==== work folder ===="
           ls work
+          echo "==== work/smali ===="
+          ls work/smali | head -n 5
 
       # STEP 6 — Build unsigned APK
       - name: Build unsigned APK
         run: |
           apktool b work -o Camera-unsigned.apk
+          ls -lh Camera-unsigned.apk
 
-      # STEP 7 — Upload hasil build
+      # STEP 7 — Upload unsigned APK
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
