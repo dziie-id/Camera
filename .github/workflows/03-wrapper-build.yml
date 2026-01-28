@@ -13,10 +13,18 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Compile smali to dex
+      - name: Compile Java
         run: |
-          mkdir -p out
-          d8 app/smali --output out
+          mkdir -p out/classes
+          javac \
+            -source 8 -target 8 \
+            -classpath $ANDROID_HOME/platforms/android-34/android.jar \
+            -d out/classes \
+            app/src/org/lineageos/aperture/WrapperActivity.java
+
+      - name: Convert to DEX
+        run: |
+          d8 out/classes --output out
 
       - name: Package APK
         run: |
@@ -34,7 +42,7 @@ jobs:
             --out Camera.apk \
             Camera-unsigned.apk
 
-      - name: Upload release
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: Camera.apk
