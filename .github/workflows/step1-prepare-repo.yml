@@ -1,0 +1,39 @@
+name: Step 1 - Prepare Repo (Base + Keystore)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Create required folders
+        run: |
+          mkdir -p base
+          mkdir -p keystore
+          mkdir -p patch
+
+      - name: Download GCam Go base APK
+        run: |
+          curl -L \
+          -o base/GCamGo.apk \
+          https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_ENG.apk
+
+      - name: Verify files
+        run: |
+          echo "=== BASE ==="
+          ls -lh base || true
+          echo "=== KEYSTORE ==="
+          ls -lh keystore || true
+
+      - name: Commit changes to repo
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add base keystore patch
+          git commit -m "Step 1: prepare base GCamGo and repo structure" || echo "Nothing to commit"
+          git push
