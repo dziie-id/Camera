@@ -1,0 +1,103 @@
+name: Step 3 - Repack Wrapper (GCam Go)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  repack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install apktool
+        run: |
+          sudo apt update
+          sudo apt install -y apktool
+
+      - name: Download decoded GCamGo from Step 2
+        uses: actions/download-artifact@v4
+        with:
+          name: gcamgo-decoded
+          path: .
+
+      - name: Verify work directory
+        run: |
+          ls -lah
+          ls -lah work
+
+      # -------------------------------
+      # ADD WRAPPER SMALI
+      # -------------------------------
+      - name: Add WrapperActivity smali
+        run: |
+          mkdir -p work/smali/org/lineageos/aperture
+
+          cat << 'EOF' > work/smali/org/lineageos/aperture/WrapperActivity.smali
+          .class public Lorg/lineageos/aperture/WrapperActivity;
+          .super Landroid/app/Activity;
+
+          .method protected onCreate(Landroid/os/Bundle;)V
+              .locals 2
+
+              invoke-super {p0, p1}, Landroid/app/Activity;->onCreate(Landroid/os/Bundle;)V
+
+              :try_internal
+              new-instance v0, Landroid/content/Intent;
+              const-string v1, "android.media.action.IMAGE_CAPTURE"
+              invoke-direct {v0, v1}, Landroid/content/Intent;-><init>(Ljava/lang/String;)V
+              invoke-virtual {p0, v0}, Landroid/app/Activity;->startActivity(Landroid/content/Intent;)V
+              goto :end
+
+              :catch_internal
+              new-instance v0, Landroid/content/Intent;
+              const-string v1, "com.google.android.GoogleCamera"
+              invoke-virtual {p0}, Landroid/app/Activity;->getPackageManager()Landroid/content/pm/PackageManager;
+              move-result-object v1
+              invoke-virtual {v1, v0}, Landroid/content/pm/PackageManager;->getLaunchIntentForPackage(Ljava/lang/String;)Landroid/content/Intent;
+              move-result-object v0
+              invoke-virtual {p0, v0}, Landroid/app/Activity;->startActivity(Landroid/content/Intent;)V
+
+              :end
+              invoke-virtual {p0}, Landroid/app/Activity;->finish()V
+              return-void
+
+              .catch Ljava/lang/Exception; {:try_internal .. :end} :catch_internal
+          .end method
+          EOF
+
+      # -------------------------------
+      # PATCH MANIFEST
+      # -------------------------------
+      - name: Patch AndroidManifest.xml
+        run: |
+          sed -i 's/package="[^"]*"/package="org.lineageos.aperture"/' work/AndroidManifest.xml
+
+          sed -i '/<application/a\
+              <activity android:name="org.lineageos.aperture.WrapperActivity"\
+              android:exported="true">\
+              <intent-filter>\
+              <action android:name="android.intent.action.MAIN"/>\
+              <category android:name="android.intent.category.LAUNCHER"/>\
+              </intent-filter>\
+              </activity>' work/AndroidManifest.xml
+
+      # -------------------------------
+      # BUILD APK (REPACK)
+      # -------------------------------
+      - name: Build unsigned APK
+        run: |
+          apktool b work -o Camera-unsigned.apk
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: camera-unsigned
+          path: Camera-unsigned.apk
