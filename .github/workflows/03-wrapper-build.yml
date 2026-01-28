@@ -31,11 +31,16 @@ jobs:
             app/src/org/lineageos/aperture/WrapperActivity.java
 
       # 3.2 Convert .class → classes.dex
-      - name: D8 to classes.dex
+      - name: D8 to classes.dex (FIX)
         run: |
           BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
+
+          cd out/classes
+          zip -r ../classes.jar .
+          cd ../..
+
           $ANDROID_HOME/build-tools/$BUILD_TOOLS/d8 \
-            out/classes \
+            out/classes.jar \
             --output app
 
       # 3.3 Build unsigned APK
