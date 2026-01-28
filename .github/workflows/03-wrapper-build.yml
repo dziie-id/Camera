@@ -24,7 +24,7 @@ jobs:
 
       - name: Convert to DEX
         run: |
-          d8 out/classes --output out
+          d8 $(find out/classes -name "*.class") --output out
 
       - name: Package APK
         run: |
