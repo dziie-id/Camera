@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
+    - name: Checkout repo
       uses: actions/checkout@v4
 
     - name: Setup Android SDK
@@ -16,7 +16,7 @@ jobs:
 
     - name: Build unsigned APK (aapt)
       run: |
-        mkdir out
+        mkdir -p out
         aapt package -f \
           -M app/AndroidManifest.xml \
           -S app/res \
@@ -27,15 +27,15 @@ jobs:
       run: |
         zipalign -f 4 out/Camera-unsigned.apk out/Camera-aligned.apk
 
-    - name: Sign APK
+    - name: Sign APK (custom key)
       run: |
         apksigner sign \
-          --key keystore/Key_20260125_203517.pk8 \
-          --cert keystore/Key_20260125_203517.x509.pem \
+          --key keystore/Key.pk8 \
+          --cert keystore/Key.x509.pem \
           --out out/Camera.apk \
           out/Camera-aligned.apk
 
-    - name: Release
+    - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v16
