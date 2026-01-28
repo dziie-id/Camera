@@ -1,3 +1,8 @@
+import android.graphics.*
+import android.media.ExifInterface
+import android.net.Uri
+import java.io.FileOutputStream
+
 package org.lineageos.aperture
 
 import android.os.Bundle
