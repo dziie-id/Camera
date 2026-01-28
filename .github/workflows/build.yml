@@ -1,4 +1,4 @@
-name: Build Camera Wrapper (Manual)
+name: Build Camera APK (Manual Trigger)
 
 on:
   workflow_dispatch:
@@ -8,29 +8,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout
-      - uses: actions/checkout@v4
+      # =========================
+      # STEP 1: CHECKOUT REPO
+      # =========================
+      - name: Checkout source
+        uses: actions/checkout@v4
 
-      # 2. Java 17
-      - uses: actions/setup-java@v4
+      # =========================
+      # STEP 2: SETUP JAVA
+      # =========================
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
 
-      # 3. Install Android SDK Commandline Tools
+      # =========================
+      # STEP 3: INSTALL ANDROID SDK (FIXED)
+      # =========================
       - name: Install Android SDK
         run: |
           sudo apt update
           sudo apt install -y unzip wget
+
           mkdir -p $HOME/android-sdk/cmdline-tools
-          cd $HOME/android-sdk
+          cd $HOME/android-sdk/cmdline-tools
+
           wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip commandlinetools-linux-*.zip
-          mv cmdline-tools cmdline-tools/latest
+          unzip commandlinetools-linux-11076708_latest.zip
+
+          mkdir -p latest
+          mv cmdline-tools/* latest/
+
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools" >> $GITHUB_ENV
 
-      # 4. Install platform & build-tools
+      # =========================
+      # STEP 4: INSTALL SDK PACKAGES
+      # =========================
       - name: Install SDK packages
         run: |
           yes | sdkmanager --licenses
@@ -39,62 +54,69 @@ jobs:
             "platforms;android-34" \
             "build-tools;34.0.0"
 
-      # 5. Prepare build dir
-      - name: Prepare sources
+      # =========================
+      # STEP 5: INSTALL APKTOOL
+      # =========================
+      - name: Install Apktool
         run: |
-          mkdir -p build
-          cp -r wrapper/* build/
+          wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
 
-      # 6. Compile resources (aapt2)
-      - name: Compile resources
+      # =========================
+      # STEP 6: DECODE APK (OPTIONAL)
+      # (Skip kalau repo sudah source)
+      # =========================
+      - name: Decode APK (if exists)
         run: |
-          $ANDROID_HOME/build-tools/34.0.0/aapt2 compile \
-            --dir build/res \
-            -o build/res.zip
+          if [ -f Camera.apk ]; then
+            java -jar apktool.jar d Camera.apk -o camera_decoded
+          else
+            echo "No Camera.apk found, skip decode"
+          fi
 
-      # 7. Compile Java
-      - name: Compile Java
+      # =========================
+      # STEP 7: BUILD APK
+      # =========================
+      - name: Build APK
         run: |
-          mkdir -p build/classes
-          javac \
-            -classpath $ANDROID_HOME/platforms/android-34/android.jar \
-            -d build/classes \
-            $(find build/java -name "*.java")
+          mkdir -p output
 
-      # 8. Dex
-      - name: Dex classes
-        run: |
-          $ANDROID_HOME/build-tools/34.0.0/d8 \
-            build/classes \
-            --output build/dex
+          if [ -d camera_decoded ]; then
+            java -jar apktool.jar b camera_decoded -o output/Camera-unsigned.apk
+          else
+            ./gradlew assembleDebug || ./gradlew assembleRelease
+            find . -name "*.apk" -exec cp {} output/ \;
+          fi
 
-      # 9. Link APK
-      - name: Link APK
-        run: |
-          $ANDROID_HOME/build-tools/34.0.0/aapt2 link \
-            -o build/Camera-unsigned.apk \
-            -I $ANDROID_HOME/platforms/android-34/android.jar \
-            --manifest build/AndroidManifest.xml \
-            --java build/R \
-            build/res.zip \
-            $(find build/dex -name "*.dex")
-
-      # 10. Sign APK
+      # =========================
+      # STEP 8: SIGN APK (DEBUG KEY)
+      # =========================
       - name: Sign APK
         run: |
-          openssl pkcs8 -topk8 -inform PEM -outform DER \
-            -in keystore/Key.pk \
-            -out key.pk8 -nocrypt
+          cd output
 
-          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
-            --key key.pk8 \
-            --cert keystore/Key.x509.pem \
-            --out build/Camera-wrapper-signed.apk \
-            build/Camera-unsigned.apk
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
 
-      # 11. Upload
-      - uses: actions/upload-artifact@v4
+          for apk in *.apk; do
+            apksigner sign \
+              --ks debug.keystore \
+              --ks-pass pass:android \
+              "$apk"
+          done
+
+      # =========================
+      # STEP 9: UPLOAD ARTIFACT
+      # =========================
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: Camera-Wrapper-APK
-          path: build/Camera-wrapper-signed.apk
+          name: Camera-APK
+          path: output/*.apk
           
