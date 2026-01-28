@@ -55,13 +55,9 @@ jobs:
           cd out
           zip -u Camera-unsigned.apk classes.dex
 
-      - name: Sign APK
+      - name: Sign APK (ROM key)
         run: |
-          APK_SIGNER=$ANDROID_HOME/build-tools/34.0.0/apksigner
-
-          chmod +x $APK_SIGNER
-
-          $APK_SIGNER sign \
+           java -jar $ANDROID_HOME/build-tools/34.0.0/lib/apksigner.jar sign \
             --key keystore/Key.pk8 \
             --cert keystore/Key.x509.pem \
             --out Camera.apk \
