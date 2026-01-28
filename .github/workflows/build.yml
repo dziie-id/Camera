@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -17,17 +17,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install Android SDK tools
-        run: |
-          sudo apt update
-          sudo apt install -y android-sdk
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Set env
+      - name: Install platform & build-tools
         run: |
-          echo "ANDROID_HOME=/usr/lib/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=/usr/lib/android-sdk" >> $GITHUB_ENV
+          sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Build classes
+      - name: Build Java classes
         run: |
           mkdir -p out/classes
           javac \
@@ -40,7 +37,7 @@ jobs:
         run: |
           d8 out/classes --output out
 
-      - name: Build unsigned apk
+      - name: Build unsigned APK
         run: |
           aapt package -f \
             -M app/AndroidManifest.xml \
@@ -61,7 +58,7 @@ jobs:
             --out Camera.apk \
             out/Camera-unsigned.apk
 
-      - name: Upload Release
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: wrapper-${{ github.run_number }}
