@@ -31,25 +31,25 @@ public class CameraActivity extends Activity {
     }
 
     private void launchCamera() {
-        File file = new File(getCacheDir(), "photo.jpg");
-        outputUri = FileProvider.getUriForFile(
-                this,
-                getPackageName() + ".provider",
-                file
-        );
+    File file = new File(getCacheDir(), "photo.jpg");
+    outputUri = FileProvider.getUriForFile(
+            this,
+            getPackageName() + ".provider",
+            file
+    );
 
-        Intent intent = new Intent("android.media.action.IMAGE_CAPTURE");
-        intent.setPackage("com.google.android.GoogleCamera");
+    boolean launched = CameraProxy.launch(
+            this,
+            outputUri,
+            CameraMode.isUW()
+    );
 
-        // hint lensa (GCam ngerti)
-        intent.putExtra("android.intent.extra.CAMERA_FACING",
-                CameraMode.isUW() ? 2 : 0);
-
-        intent.putExtra("output", outputUri);
-        intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-
-        startActivityForResult(intent, 1001);
+    if (!launched) {
+        setResult(RESULT_CANCELED);
+        finish();
     }
+  }
+
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
