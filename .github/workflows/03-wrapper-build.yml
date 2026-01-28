@@ -37,10 +37,10 @@ jobs:
       - name: Sign APK
         run: |
           $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
-            --key keystore/Key.pk8 \
-            --cert keystore/Key.x509.pem \
-            --out Camera.apk \
-            Camera-unsigned.apk
+          --key keystore/Key.pk8 \
+          --cert keystore/Key.x509.pem \
+          --out out/Camera.apk \
+          out/Camera-unsigned.apk
 
       - name: Release
         uses: softprops/action-gh-release@v2
