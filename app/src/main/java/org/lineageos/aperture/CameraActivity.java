@@ -75,8 +75,10 @@ public class CameraActivity extends Activity {
             result.setData(outputUri);
             setResult(RESULT_OK, result);
         } else {
-            setResult(RESULT_CANCELED);
-        }
-        finish();
+    if (outputUri != null) {
+        new File(getCacheDir(), "photo.jpg").delete();
     }
+    setResult(RESULT_CANCELED);
+}
+
 }
