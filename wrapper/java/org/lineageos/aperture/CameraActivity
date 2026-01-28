@@ -1,14 +1,11 @@
 package org.lineageos.aperture;
 
-import android.content.Context;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraManager;
-import android.net.Uri;
 import android.os.Bundle;
-import android.widget.ImageButton;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
@@ -20,17 +17,15 @@ import androidx.core.content.ContextCompat;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.io.File;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 
 public class CameraActivity extends AppCompatActivity {
 
+    private static final String TAG = "Aperture";
+
     private PreviewView previewView;
     private ImageCapture imageCapture;
-    private ExecutorService cameraExecutor;
-
-    private boolean useUltraWide = false;
-    private String ultraWideCameraId = null;
+    private Camera camera;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,50 +33,8 @@ public class CameraActivity extends AppCompatActivity {
         setContentView(R.layout.activity_camera);
 
         previewView = findViewById(R.id.previewView);
-        ImageButton shutter = findViewById(R.id.btnShutter);
-        ImageButton zoom = findViewById(R.id.btnZoom);
 
-        cameraExecutor = Executors.newSingleThreadExecutor();
-
-        detectUltraWideCamera();
         startCamera();
-
-        zoom.setOnClickListener(v -> {
-            useUltraWide = !useUltraWide;
-            startCamera();
-        });
-
-        shutter.setOnClickListener(v -> takePhoto());
-    }
-
-    private void detectUltraWideCamera() {
-        try {
-            CameraManager manager =
-                    (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-
-            for (String cameraId : manager.getCameraIdList()) {
-                CameraCharacteristics chars =
-                        manager.getCameraCharacteristics(cameraId);
-
-                Float[] focalLengths =
-                        chars.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-
-                Integer facing =
-                        chars.get(CameraCharacteristics.LENS_FACING);
-
-                if (facing != null
-                        && facing == CameraCharacteristics.LENS_FACING_BACK
-                        && focalLengths != null
-                        && focalLengths.length > 0
-                        && focalLengths[0] < 2.0f) {
-
-                    ultraWideCameraId = cameraId;
-                    break;
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     private void startCamera() {
@@ -91,85 +44,63 @@ public class CameraActivity extends AppCompatActivity {
         cameraProviderFuture.addListener(() -> {
             try {
                 ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
-
-                Preview preview = new Preview.Builder().build();
-                preview.setSurfaceProvider(previewView.getSurfaceProvider());
-
-                imageCapture = new ImageCapture.Builder()
-                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
-                        .setEnableShutterSound(false) // 🔇 SILENT FIX
-                        .build();
-
-                CameraSelector selector;
-
-                if (useUltraWide && ultraWideCameraId != null) {
-                    selector = new CameraSelector.Builder()
-                            .addCameraFilter(cameras -> {
-                                for (var camera : cameras) {
-                                    if (camera.getCameraInfo()
-                                            .getCameraId()
-                                            .equals(ultraWideCameraId)) {
-                                        return java.util.Collections.singletonList(camera);
-                                    }
-                                }
-                                return cameras;
-                            })
-                            .build();
-                } else {
-                    selector = new CameraSelector.Builder()
-                            .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                            .build();
-                }
-
-                cameraProvider.unbindAll();
-                cameraProvider.bindToLifecycle(
-                        this,
-                        selector,
-                        preview,
-                        imageCapture
-                );
-
-            } catch (Exception e) {
-                e.printStackTrace();
+                bindUseCases(cameraProvider);
+            } catch (ExecutionException | InterruptedException e) {
+                Log.e(TAG, "Camera start failed", e);
             }
         }, ContextCompat.getMainExecutor(this));
     }
 
-    private void takePhoto() {
+    private void bindUseCases(@NonNull ProcessCameraProvider cameraProvider) {
+        cameraProvider.unbindAll();
+
+        Preview preview = new Preview.Builder().build();
+        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+        imageCapture = new ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .build();
+
+        CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+
+        camera = cameraProvider.bindToLifecycle(
+                this,
+                cameraSelector,
+                preview,
+                imageCapture
+        );
+    }
+
+    // Dipanggil dari tombol shutter
+    public void takePicture() {
         if (imageCapture == null) return;
 
         File photoFile = new File(
                 getCacheDir(),
-                "capture_" + System.currentTimeMillis() + ".jpg"
+                "photo_" + System.currentTimeMillis() + ".jpg"
         );
 
-        ImageCapture.OutputFileOptions options =
+        ImageCapture.OutputFileOptions outputOptions =
                 new ImageCapture.OutputFileOptions.Builder(photoFile).build();
 
         imageCapture.takePicture(
-                options,
+                outputOptions,
                 ContextCompat.getMainExecutor(this),
                 new ImageCapture.OnImageSavedCallback() {
 
                     @Override
                     public void onImageSaved(
-                            @NonNull ImageCapture.OutputFileResults output) {
-                        setResult(RESULT_OK);
-                        finish();
+                            @NonNull ImageCapture.OutputFileResults outputFileResults) {
+                        Log.d(TAG, "Photo captured: " + photoFile.getAbsolutePath());
+                        // Foto ADA di cache, tapi TIDAK masuk gallery
                     }
 
                     @Override
                     public void onError(
                             @NonNull ImageCaptureException exception) {
-                        exception.printStackTrace();
+                        Log.e(TAG, "Capture failed", exception);
                     }
                 }
         );
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        cameraExecutor.shutdown();
     }
 }
