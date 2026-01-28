@@ -57,7 +57,11 @@ jobs:
 
       - name: Sign APK
         run: |
-          apksigner sign \
+          APK_SIGNER=$ANDROID_HOME/build-tools/34.0.0/apksigner
+
+          chmod +x $APK_SIGNER
+
+          $APK_SIGNER sign \
             --key keystore/Key.pk8 \
             --cert keystore/Key.x509.pem \
             --out Camera.apk \
