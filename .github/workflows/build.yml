@@ -29,8 +29,10 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper --gradle-version 7.5 --distribution-type all
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 7.5 # Kunci di versi ini
 
       - name: Inject Custom Config
         run: |
@@ -39,9 +41,9 @@ jobs:
           sed -i "s/def appVersionCode = .*/def appVersionCode = ${{ github.event.inputs.version_code }}/g" app/build.gradle
           sed -i "s/package=\".*\"/package=\"${{ github.event.inputs.package_id }}\"/g" app/src/main/AndroidManifest.xml
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --warning-mode none
-      
+      - name: Build with Gradle
+        run: gradle :app:assembleDebug --warning-mode none
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
