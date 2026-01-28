@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       package_id:
-        description: 'Nama Paket (Contoh: org.lineageos.aperture)'
+        description: 'Nama Paket'
         required: true
         default: 'org.lineageos.aperture'
       version_name:
-        description: 'Nama Versi (Contoh: 16)'
+        description: 'Nama Versi'
         required: true
         default: '16'
       version_code:
-        description: 'Kode Versi (Contoh: 36)'
+        description: 'Kode Versi'
         required: true
         default: '36'
 
@@ -22,23 +22,15 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-       
-      - name: Set up JDK 17
+
+      - name: Set up JDK 11
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '11'
           distribution: 'temurin'
 
-            # ... (langkah setup java sama)
-      
       - name: Generate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.2 --distribution-type all
-
-      - name: Clean Build
-        # Pakai --no-daemon biar gak nyimpen cache error yang lama
-        run: ./gradlew clean assembleDebug --no-daemon
-
-
+        run: gradle wrapper --gradle-version 7.5 --distribution-type all
 
       - name: Inject Custom Config
         run: |
@@ -48,11 +40,11 @@ jobs:
           sed -i "s/package=\".*\"/package=\"${{ github.event.inputs.package_id }}\"/g" app/src/main/AndroidManifest.xml
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Upload APK Result
+        run: ./gradlew assembleDebug --no-daemon --warning-mode none
+      
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Camera-Wrapper-${{ github.event.inputs.package_id }}
+          name: Camera-Wrapper
           path: app/build/outputs/apk/debug/*.apk
           
