@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/camera_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Preview kamera -->
+    <FrameLayout
+        android:id="@+id/camera_preview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Watermark -->
+    <include layout="@layout/watermark_text" />
+
+    <!-- Zoom bar -->
+    <include
+        layout="@layout/layout_zoom_bar"
+        android:layout_gravity="center_horizontal|bottom"
+        android:layout_marginBottom="96dp" />
+
+    <!-- Shutter -->
+    <include layout="@layout/layout_shutter" />
+
+</FrameLayout>
