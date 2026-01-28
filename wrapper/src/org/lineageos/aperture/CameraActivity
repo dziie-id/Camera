@@ -54,9 +54,6 @@ public class CameraActivity extends AppCompatActivity {
         shutter.setOnClickListener(v -> takePhoto());
     }
 
-    /**
-     * Deteksi kamera UltraWide (focal length terkecil)
-     */
     private void detectUltraWideCamera() {
         try {
             CameraManager manager =
@@ -75,13 +72,11 @@ public class CameraActivity extends AppCompatActivity {
                 if (facing != null
                         && facing == CameraCharacteristics.LENS_FACING_BACK
                         && focalLengths != null
-                        && focalLengths.length > 0) {
+                        && focalLengths.length > 0
+                        && focalLengths[0] < 2.0f) {
 
-                    // UW biasanya focal < 2.0
-                    if (focalLengths[0] < 2.0f) {
-                        ultraWideCameraId = cameraId;
-                        break;
-                    }
+                    ultraWideCameraId = cameraId;
+                    break;
                 }
             }
         } catch (Exception e) {
@@ -102,6 +97,7 @@ public class CameraActivity extends AppCompatActivity {
 
                 imageCapture = new ImageCapture.Builder()
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                        .setEnableShutterSound(false) // 🔇 SILENT FIX
                         .build();
 
                 CameraSelector selector;
@@ -158,7 +154,6 @@ public class CameraActivity extends AppCompatActivity {
                     @Override
                     public void onImageSaved(
                             @NonNull ImageCapture.OutputFileResults output) {
-                        Uri uri = Uri.fromFile(photoFile);
                         setResult(RESULT_OK);
                         finish();
                     }
