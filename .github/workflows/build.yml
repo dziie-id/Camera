@@ -17,55 +17,82 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # 3. Install Android build tools
-      - name: Install Android SDK tools
+      # 3. Install Android SDK Commandline Tools
+      - name: Install Android SDK
         run: |
           sudo apt update
-          sudo apt install -y aapt zipalign apksigner
+          sudo apt install -y unzip wget
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk
+          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip commandlinetools-linux-*.zip
+          mv cmdline-tools cmdline-tools/latest
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools" >> $GITHUB_ENV
 
-      # 4. Prepare build dir
-      - name: Prepare build
+      # 4. Install platform & build-tools
+      - name: Install SDK packages
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      # 5. Prepare build dir
+      - name: Prepare sources
         run: |
           mkdir -p build
           cp -r wrapper/* build/
 
-      # 5. Compile resources
+      # 6. Compile resources (aapt2)
       - name: Compile resources
         run: |
-          aapt compile \
-            -o build/res.zip \
-            --dir build/res
+          $ANDROID_HOME/build-tools/34.0.0/aapt2 compile \
+            --dir build/res \
+            -o build/res.zip
 
-      # 6. Link APK
+      # 7. Compile Java
+      - name: Compile Java
+        run: |
+          mkdir -p build/classes
+          javac \
+            -classpath $ANDROID_HOME/platforms/android-34/android.jar \
+            -d build/classes \
+            $(find build/java -name "*.java")
+
+      # 8. Dex
+      - name: Dex classes
+        run: |
+          $ANDROID_HOME/build-tools/34.0.0/d8 \
+            build/classes \
+            --output build/dex
+
+      # 9. Link APK
       - name: Link APK
         run: |
-          aapt link \
+          $ANDROID_HOME/build-tools/34.0.0/aapt2 link \
             -o build/Camera-unsigned.apk \
-            -I /usr/lib/android-sdk/platforms/android-34/android.jar \
+            -I $ANDROID_HOME/platforms/android-34/android.jar \
             --manifest build/AndroidManifest.xml \
-            build/res.zip
+            --java build/R \
+            build/res.zip \
+            $(find build/dex -name "*.dex")
 
-      # 7. Zipalign
-      - name: Zipalign
-        run: |
-          zipalign -f 4 \
-            build/Camera-unsigned.apk \
-            build/Camera-aligned.apk
-
-      # 8. Sign APK
+      # 10. Sign APK
       - name: Sign APK
         run: |
           openssl pkcs8 -topk8 -inform PEM -outform DER \
             -in keystore/Key.pk \
             -out key.pk8 -nocrypt
 
-          apksigner sign \
+          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
             --key key.pk8 \
             --cert keystore/Key.x509.pem \
             --out build/Camera-wrapper-signed.apk \
-            build/Camera-aligned.apk
+            build/Camera-unsigned.apk
 
-      # 9. Upload
+      # 11. Upload
       - uses: actions/upload-artifact@v4
         with:
           name: Camera-Wrapper-APK
