@@ -1,0 +1,40 @@
+name: Step 2 - Decode GCam Go Base
+
+on:
+  workflow_dispatch:
+
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download artifact from Step 1
+        uses: actions/download-artifact@v4
+        with:
+          name: gcamgo-base
+          path: base
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install apktool
+        run: |
+          sudo apt update
+          sudo apt install -y apktool
+
+      - name: Decode GCam Go APK
+        run: |
+          mkdir -p work
+          apktool d base/GCamGo.apk -o work/gcamgo_decoded -f
+
+      - name: Upload decoded output
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcamgo-decoded
+          path: work/gcamgo_decoded
