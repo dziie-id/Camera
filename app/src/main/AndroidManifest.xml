@@ -5,16 +5,20 @@
         android:label="Camera"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
 
+        <!-- MAIN / 1x (default) -->
         <activity
             android:name=".CameraWrapperActivity"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.media.action.IMAGE_CAPTURE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-
         </activity>
+
+        <!-- UW (dipanggil manual) -->
+        <activity
+            android:name=".UltraWideActivity"
+            android:exported="false" />
 
     </application>
 </manifest>
