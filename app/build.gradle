@@ -1,0 +1,37 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace "org.lineageos.aperture"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "org.lineageos.aperture"
+        minSdk 26
+        targetSdk 34
+
+        versionCode 36
+        versionName "16"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("../keystore/Key.jks")
+            storePassword "password"
+            keyAlias "key0"
+            keyPassword "password"
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}
