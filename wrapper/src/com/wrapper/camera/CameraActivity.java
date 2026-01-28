@@ -8,12 +8,16 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.widget.ImageButton;
 
-import java.io.OutputStream;
+import androidx.core.content.FileProvider;
+
+import java.io.File;
+import java.io.FileOutputStream;
 
 public class CameraActivity extends Activity {
 
     private static final int REQ_GCAM = 1001;
     private float currentZoom = 1.0f;
+    private Uri cacheUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,7 +32,8 @@ public class CameraActivity extends Activity {
         btnZoomUw.setOnClickListener(v -> currentZoom = 0.7f);
 
         btnShutter.setOnClickListener(v -> {
-            Intent intent = GcamLauncher.buildIntent(this, currentZoom);
+            cacheUri = createCacheUri();
+            Intent intent = GcamLauncher.buildIntent(this, currentZoom, cacheUri);
             startActivityForResult(intent, REQ_GCAM);
         });
     }
@@ -37,22 +42,30 @@ public class CameraActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == REQ_GCAM && resultCode == RESULT_OK) {
-            if (data != null && data.getData() != null) {
-                Uri photoUri = data.getData();
-                processPhoto(photoUri);
+        if (requestCode == REQ_GCAM && resultCode == RESULT_OK && cacheUri != null) {
+            processPhoto(cacheUri);
 
-                // RETURN KE APP PEMANGGIL
-                Intent result = new Intent();
-                result.setData(photoUri);
-                setResult(RESULT_OK, result);
+            Intent result = new Intent();
+            result.setData(cacheUri);
+            result.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            setResult(RESULT_OK, result);
+            finish();
+        } else {
+            setResult(RESULT_CANCELED);
+            finish();
+        }
+    }
 
-                // AUTO CLOSE
-                finish();
-            } else {
-                setResult(RESULT_CANCELED);
-                finish();
-            }
+    private Uri createCacheUri() {
+        try {
+            File file = new File(getCacheDir(), "capture.jpg");
+            return FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".provider",
+                    file
+            );
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -64,9 +77,10 @@ public class CameraActivity extends Activity {
 
             Bitmap watermarked = WatermarkUtil.apply(bitmap);
 
-            OutputStream os = getContentResolver().openOutputStream(uri);
-            watermarked.compress(Bitmap.CompressFormat.JPEG, 85, os);
-            os.close();
+            FileOutputStream fos =
+                    new FileOutputStream(new File(getCacheDir(), "capture.jpg"));
+            watermarked.compress(Bitmap.CompressFormat.JPEG, 85, fos);
+            fos.close();
 
         } catch (Exception e) {
             e.printStackTrace();
