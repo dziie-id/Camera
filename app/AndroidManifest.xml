@@ -1,15 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.lineageos.aperture">
+    package="org.lineageos.aperture"
+    android:versionCode="36"
+    android:versionName="16">
 
     <application
         android:label="Camera"
-        android:allowBackup="false"
-        android:exported="true">
+        android:theme="@style/Theme.Wrapper"
+        android:allowBackup="false">
 
         <activity
-            android:name="org.lineageos.aperture.WrapperActivity"
-            android:exported="true">
+            android:name=".WrapperActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
