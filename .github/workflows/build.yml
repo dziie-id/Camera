@@ -29,11 +29,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+            # ... (langkah setup java sama)
+      
       - name: Generate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.2 --distribution-type all
 
-      - name: Clean and Build
-        run: ./gradlew clean assembleDebug
+      - name: Clean Build
+        # Pakai --no-daemon biar gak nyimpen cache error yang lama
+        run: ./gradlew clean assembleDebug --no-daemon
+
 
 
       - name: Inject Custom Config
