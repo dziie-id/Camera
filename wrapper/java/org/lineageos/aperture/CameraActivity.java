@@ -49,6 +49,15 @@ public class CameraActivity extends AppCompatActivity {
         
         setContentView(R.layout.activity_camera);
 
+        getWindow().getDecorView().setSystemUiVisibility(
+        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+);
+        
+
         previewView = findViewById(R.id.previewView);
         startCamera();
 
@@ -158,16 +167,19 @@ public class CameraActivity extends AppCompatActivity {
 
     /* ================= DIRECT INTENT ================= */
 
-    private void sendResult(Bitmap bitmap) {
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream);
+    private static final String RESULT_IMAGE_KEY =
+        "org.lineageos.aperture.RESULT_IMAGE_JPEG";
 
-        Intent data = new Intent();
-        data.putExtra("image", stream.toByteArray());
+private void sendResult(Bitmap bitmap) {
+    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+    bitmap.compress(Bitmap.CompressFormat.JPEG, 85, stream);
 
-        setResult(RESULT_OK, data);
-        finish(); // langsung balik ke app pemanggil
-    }
+    Intent data = new Intent();
+    data.putExtra(RESULT_IMAGE_KEY, stream.toByteArray());
+
+    setResult(RESULT_OK, data);
+    finish();
+}
 
     /* ================= WATERMARK ================= */
 
