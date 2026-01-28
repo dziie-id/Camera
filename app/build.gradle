@@ -10,20 +10,16 @@ android {
         applicationId "org.lineageos.aperture"
         minSdk 26
         targetSdk 34
-        versionCode 36
-        versionName "16"
+        versionCode 1
+        versionName "1.0"
     }
 
     buildTypes {
         debug {
-            // otomatis pakai debug key Gradle
             debuggable true
         }
-
         release {
             minifyEnabled false
-            shrinkResources false
-            // TANPA signingConfig → otomatis debug key
         }
     }
 
