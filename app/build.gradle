@@ -17,13 +17,10 @@ android {
     }
 
     signingConfigs {
-        release {
-            storeFile file("../keystore/Key.pk8")
-            storePassword ""
-            keyAlias "platform"
-            keyPassword ""
-        }
+    release {
+        ...
     }
+}
 
     buildTypes {
         release {
