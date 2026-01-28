@@ -7,23 +7,23 @@ jobs:
   nuke:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       contents: write
+      actions: write
 
     steps:
-      - name: Checkout repo
+      - name: 📥 Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 💣 Remove all files except keystore & NUKE workflow
+      - name: 💣 NUKE FILES (keep keystore & NUKE workflow)
         run: |
           shopt -s extglob
 
           echo "== Cleaning root =="
           rm -rf !(keystore|.github)
 
-          echo "== Cleaning workflows (keep NUKE only) =="
+          echo "== Cleaning workflows (keep NUKE_REPO.yml only) =="
           find .github/workflows -type f ! -name 'NUKE_REPO.yml' -delete
 
           echo "== Result =="
@@ -39,23 +39,27 @@ jobs:
 
       - name: 🧨 Delete ALL workflow runs (history)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           repo="${{ github.repository }}"
-          runs=$(gh api repos/$repo/actions/runs --paginate -q '.workflow_runs[].id')
-          for run in $runs; do
-            echo "Deleting run $run"
-            gh api -X DELETE repos/$repo/actions/runs/$run
-          done
+          echo "Deleting workflow runs for $repo"
+
+          gh api repos/$repo/actions/runs --paginate -q '.workflow_runs[].id' \
+          | while read run; do
+              echo "Deleting run $run"
+              gh api -X DELETE repos/$repo/actions/runs/$run || echo "Skipped $run"
+            done
 
       - name: 🗑 Delete ALL artifacts
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           repo="${{ github.repository }}"
-          artifacts=$(gh api repos/$repo/actions/artifacts --paginate -q '.artifacts[].id')
-          for art in $artifacts; do
-            echo "Deleting artifact $art"
-            gh api -X DELETE repos/$repo/actions/artifacts/$art
-          done
-          
+          echo "Deleting artifacts for $repo"
+
+          gh api repos/$repo/actions/artifacts --paginate -q '.artifacts[].id' \
+          | while read art; do
+              echo "Deleting artifact $art"
+              gh api -X DELETE repos/$repo/actions/artifacts/$art || echo "Skipped $art"
+            done
+            
