@@ -36,15 +36,20 @@ jobs:
       # ===============================
       # BUILD APK (PAKAI APKTOOL AMAN)
       # ===============================
-      - name: Build unsigned APK
+      - name: Build unsigned APK (wrapper only)
         run: |
-          sudo apt update
-          sudo apt install -y apktool
+          BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n 1)
+          AAPT2=$ANDROID_HOME/build-tools/$BUILD_TOOLS/aapt2
 
-          export JAVA_OPTS="-Xmx6g"
-
-          apktool b app -o Camera-unsigned.apk
-
+          mkdir -p out
+          $AAPT2 compile --dir app/res -o out/res.zip
+          $AAPT2 link \
+             -o Camera-unsigned.apk \
+             --manifest app/AndroidManifest.xml \
+             -I $ANDROID_HOME/platforms/android-34/android.jar \
+             out/res.zip \
+             app/classes.dex
+       
       # ===============================
       # SIGN APK (KEY DARI REPO)
       # ===============================
