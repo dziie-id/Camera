@@ -1,43 +1,25 @@
 package org.lineageos.aperture;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
-import android.os.Bundle;
-import java.io.File;
 
-public class CameraWrapperActivity extends Activity {
+public class GcamDelegate {
 
-    private static final int REQ_GCAM = 1001;
-    private Uri outputUri;
+    public static Intent createIntent(Uri output, boolean uw) {
+        Intent i = new Intent("android.media.action.IMAGE_CAPTURE");
+        i.setPackage("com.sgc.camera");
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+        i.putExtra("output", output);
+        i.putExtra("disable_aux", true);
 
-        File cacheFile = new File(getCacheDir(), "capture.jpg");
-        outputUri = Uri.fromFile(cacheFile);
-
-        Intent gcam = GcamDelegate.createIntent(outputUri);
-        startActivityForResult(gcam, REQ_GCAM);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == REQ_GCAM && resultCode == RESULT_OK) {
-            Intent result = new Intent();
-            result.setData(outputUri);
-            setResult(RESULT_OK, result);
+        if (uw) {
+            i.putExtra("camera_mode", "ultrawide");
+            i.putExtra("lens_id", 2);
         } else {
-            setResult(RESULT_CANCELED);
+            i.putExtra("camera_mode", "main");
+            i.putExtra("lens_id", 0);
         }
-        finish();
-    }
 
-    @Override
-    protected void onDestroy() {
-        File f = new File(getCacheDir(), "capture.jpg");
-        if (f.exists()) f.delete();
-        super.onDestroy();
+        return i;
     }
 }
