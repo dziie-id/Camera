@@ -1,92 +1,54 @@
-name: Build GCamGo Wrapper (Signed)
+name: Step 3 - Inject Wrapper Smali
 
 on:
   workflow_dispatch:
-    inputs:
-      package_name:
-        description: "Package name"
-        default: "org.lineageos.aperture"
-      version_name:
-        description: "Version name"
-        default: "16"
-      version_code:
-        description: "Version code"
-        default: "36"
 
 jobs:
-  build:
+  wrapper:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Install tools
-        run: |
-          sudo apt update
-          sudo apt install -y apktool wget unzip
-
-      - name: Download GCam Go
+      - name: Download base GCamGo
         run: |
           mkdir -p base
-          wget -O base/GCamGo.apk \
+          curl -L -o base/GCamGo.apk \
           https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_ENG.apk
+
+      - name: Install apktool
+        run: |
+          sudo apt update
+          sudo apt install -y apktool
 
       - name: Decode APK
         run: |
-          apktool d base/GCamGo.apk -o work -f
+          apktool d base/GCamGo.apk -o work --force
 
-      - name: Patch Manifest
-        run: |
-          sed -i "s/package=\"[^\"]*\"/package=\"${{ github.event.inputs.package_name }}\"/" work/AndroidManifest.xml
-          sed -i "s/android:versionName=\"[^\"]*\"/android:versionName=\"${{ github.event.inputs.version_name }}\"/" work/AndroidManifest.xml
-          sed -i "s/android:versionCode=\"[^\"]*\"/android:versionCode=\"${{ github.event.inputs.version_code }}\"/" work/AndroidManifest.xml
-
-      - name: Inject Wrapper (Silent + No Vibrate)
+      - name: Copy wrapper smali
         run: |
           mkdir -p work/smali/wrapper
-          cat <<EOF > work/smali/wrapper/Wrapper.smali
-.class public Lwrapper/Wrapper;
-.super Landroid/app/Activity;
+          cp smali/Wrapper.smali work/smali/wrapper/Wrapper.smali
 
-.method protected onCreate(Landroid/os/Bundle;)V
-    .locals 1
-    invoke-super {p0, p1}, Landroid/app/Activity;->onCreate(Landroid/os/Bundle;)V
+      - name: Patch AndroidManifest
+        run: |
+          sed -i 's|</application>|\
+          <activity android:name="wrapper.Wrapper" \
+          android:exported="true" \
+          android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen">\
+            <intent-filter>\
+              <action android:name="android.intent.action.MAIN"/>\
+              <category android:name="android.intent.category.LAUNCHER"/>\
+            </intent-filter>\
+          </activity>\
+          </application>|' work/AndroidManifest.xml
 
-    const-string v0, "com.google.android.apps.camera.go"
-    invoke-virtual {p0}, Landroid/content/Context;->getPackageManager()Landroid/content/pm/PackageManager;
-    move-result-object p1
-    invoke-virtual {p1, v0}, Landroid/content/pm/PackageManager;->getLaunchIntentForPackage(Ljava/lang/String;)Landroid/content/Intent;
-    move-result-object p1
-    if-eqz p1, :end
-    invoke-virtual {p0, p1}, Landroid/app/Activity;->startActivity(Landroid/content/Intent;)V
-:end
-    invoke-virtual {p0}, Landroid/app/Activity;->finish()V
-    return-void
-.end method
-EOF
-
-      - name: Build APK
+      - name: Build APK unsigned
         run: |
           apktool b work -o Camera-unsigned.apk
 
-      - name: Sign APK
-        run: |
-          BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools | sort -V | tail -n1)
-          $ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner sign \
-            --key keystore/Key.pk8 \
-            --cert keystore/Key.x509.pem \
-            --out Camera.apk \
-            Camera-unsigned.apk
-
-      - name: Upload Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: v${{ github.event.inputs.version_name }}
-          files: Camera.apk
+          name: wrapper-unsigned
+          path: Camera-unsigned.apk
