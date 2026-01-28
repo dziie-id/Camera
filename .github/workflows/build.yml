@@ -14,10 +14,15 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
+    - name: Install build-tools
+      run: |
+        sdkmanager "build-tools;34.0.0" "platforms;android-34"
+
     - name: Build unsigned APK (aapt)
       run: |
         mkdir -p out
-        aapt package -f \
+        AAPT=$ANDROID_HOME/build-tools/34.0.0/aapt
+        $AAPT package -f \
           -M app/AndroidManifest.xml \
           -S app/res \
           -I $ANDROID_HOME/platforms/android-34/android.jar \
@@ -25,11 +30,13 @@ jobs:
 
     - name: Zipalign
       run: |
-        zipalign -f 4 out/Camera-unsigned.apk out/Camera-aligned.apk
+        ZIPALIGN=$ANDROID_HOME/build-tools/34.0.0/zipalign
+        $ZIPALIGN -f 4 out/Camera-unsigned.apk out/Camera-aligned.apk
 
-    - name: Sign APK (custom key)
+    - name: Sign APK
       run: |
-        apksigner sign \
+        APKSIGNER=$ANDROID_HOME/build-tools/34.0.0/apksigner
+        $APKSIGNER sign \
           --key keystore/Key.pk8 \
           --cert keystore/Key.x509.pem \
           --out out/Camera.apk \
