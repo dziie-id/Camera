@@ -17,6 +17,23 @@ public class CameraActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
 
+        private void clearOldCache() {
+    File cacheDir = getCacheDir();
+    if (cacheDir == null) return;
+
+    File[] files = cacheDir.listFiles();
+    if (files == null) return;
+
+    long now = System.currentTimeMillis();
+    for (File f : files) {
+        // hapus file > 10 menit
+        if (now - f.lastModified() > 10 * 60 * 1000) {
+            f.delete();
+        }
+    }
+        }
+        
+
         Button shutter = findViewById(R.id.btn_shutter);
         Button toggle = findViewById(R.id.btn_toggle);
 
