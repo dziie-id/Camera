@@ -1,32 +1,22 @@
-name: Step 1 - Fetch GCam Go Base (Artifact)
+name: Step 1 - Fetch GCam Go Base APK
 
 on:
   workflow_dispatch:
 
 jobs:
-  fetch-base:
+  fetch:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Create workspace
+      - name: Download GCam Go APK
         run: |
-          mkdir -p workspace/base
-
-      - name: Download GCam Go base APK
-        run: |
+          mkdir -p base
           curl -L \
-            -o workspace/base/GCamGo.apk \
-            https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_ENG.apk
+            https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_ENG.apk \
+            -o base/GCamGo.apk
 
-      - name: Verify APK
-        run: |
-          ls -lh workspace/base/GCamGo.apk
-
-      - name: Upload base APK as artifact
+      - name: Upload GCam Go as artifact
         uses: actions/upload-artifact@v4
         with:
           name: gcamgo-base
-          path: workspace/base/GCamGo.apk
+          path: base/GCamGo.apk
