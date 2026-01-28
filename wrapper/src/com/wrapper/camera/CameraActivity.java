@@ -1,58 +1,30 @@
 package com.wrapper.camera;
 
-import android.app.Activity;
-import android.content.Intent;
-import android.os.Bundle;
-import android.view.View;
-import android.widget.ImageButton;
+import android.graphics.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
-public class CameraActivity extends Activity {
+public class WatermarkUtil {
 
-    private float currentZoom = 1.0f;
+    public static Bitmap apply(Bitmap src) {
+        Bitmap result = src.copy(Bitmap.Config.ARGB_8888, true);
+        Canvas canvas = new Canvas(result);
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_camera);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.WHITE);
+        paint.setTextSize(36f);
+        paint.setShadowLayer(3f, 2f, 2f, Color.BLACK);
 
-        ImageButton btnShutter = findViewById(R.id.btn_shutter);
-        ImageButton btnZoom1x = findViewById(R.id.btn_zoom_1x);
-        ImageButton btnZoomUw = findViewById(R.id.btn_zoom_uw);
+        String text = new SimpleDateFormat(
+                "HH:mm | dd-MM-yyyy",
+                Locale.getDefault()
+        ).format(new Date());
 
-        btnZoom1x.setOnClickListener(v -> currentZoom = 1.0f);
-        btnZoomUw.setOnClickListener(v -> currentZoom = 0.7f);
+        float x = result.getWidth() - paint.measureText(text) - 32;
+        float y = result.getHeight() - 32;
 
-        btnShutter.setOnClickListener(v -> {
-            GcamLauncher.launch(this, currentZoom);
-        });
-    }
-}
-package com.wrapper.camera;
-
-import android.app.Activity;
-import android.content.Intent;
-import android.os.Bundle;
-import android.view.View;
-import android.widget.ImageButton;
-
-public class CameraActivity extends Activity {
-
-    private float currentZoom = 1.0f;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_camera);
-
-        ImageButton btnShutter = findViewById(R.id.btn_shutter);
-        ImageButton btnZoom1x = findViewById(R.id.btn_zoom_1x);
-        ImageButton btnZoomUw = findViewById(R.id.btn_zoom_uw);
-
-        btnZoom1x.setOnClickListener(v -> currentZoom = 1.0f);
-        btnZoomUw.setOnClickListener(v -> currentZoom = 0.7f);
-
-        btnShutter.setOnClickListener(v -> {
-            GcamLauncher.launch(this, currentZoom);
-        });
+        canvas.drawText(text, x, y, paint);
+        return result;
     }
 }
