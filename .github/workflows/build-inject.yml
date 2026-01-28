@@ -26,11 +26,12 @@ jobs:
       uses: android-actions/setup-android@v3
 
     # 4️⃣ Install apktool
-    - name: Install apktool
+    - name: Install apktool (official)
       run: |
-        sudo apt update
-        sudo apt install -y apktool unzip wget
-
+        mkdir -p tools
+        wget -O tools/apktool.jar https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar
+        wget -O tools/apktool https://raw.githubusercontent.com/iBotPeaches/Apktool/master/scripts/linux/apktool
+        chmod +x tools/apktool
     # 5️⃣ Download GCam Go
     - name: Download GCam Go
       run: |
@@ -41,7 +42,7 @@ jobs:
     # 6️⃣ Decode APK
     - name: Decode APK
       run: |
-        apktool d base/GCamGo.apk -o work --force
+        java -Xmx6g -jar tools/apktool.jar d base/GCamGo.apk -o work --force
 
     # 7️⃣ Inject smali anti double intent
     - name: Patch smali (anti double capture)
@@ -67,7 +68,7 @@ jobs:
     - name: Build unsigned APK
       run: |
         export APKTOOL_OPTS="-Xmx6g"
-        apktool b work -o Camera-unsigned.apk
+        java -Xmx6g -jar tools/apktool.jar b work -o Camera-unsigned.apk
 
     # 9️⃣ Sign APK
     - name: Sign APK
