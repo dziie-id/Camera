@@ -3,13 +3,12 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
-// JANGAN DIUBAH MANUAL DI SINI - BIARKAN GITHUB ACTIONS YANG MENGISI
 def appPackageId = "org.lineageos.aperture"
 def appVersionName = "16"
 def appVersionCode = 36
 
 android {
-    namespace appPackageId
+    namespace appPackageId // Pastikan ini ada
     compileSdk 34
 
     defaultConfig {
@@ -18,44 +17,31 @@ android {
         targetSdk 34
         versionCode appVersionCode
         versionName appVersionName
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-        debug {
-            minifyEnabled false
+            minifyEnabled false // Matikan biar nggak nyari file Proguard
         }
     }
-
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-
-    kotlinOptions {
-        jvmTarget = '17'
-    }
 }
 
 dependencies {
-    // Dasar Android
-    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.core:core-ktx:1.10.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     
-    // CameraX (Inti Kamera)
-    def camerax_version = "1.3.1"
+    // CameraX
+    def camerax_version = "1.2.3" // Versi stabil
     implementation "androidx.camera:camera-core:${camerax_version}"
     implementation "androidx.camera:camera-camera2:${camerax_version}"
     implementation "androidx.camera:camera-lifecycle:${camerax_version}"
     implementation "androidx.camera:camera-view:${camerax_version}"
-
-    // ExifInterface (Penting buat Watermark & Rotasi Foto)
     implementation "androidx.exifinterface:exifinterface:1.3.6"
 }
