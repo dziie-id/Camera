@@ -50,9 +50,9 @@ jobs:
       # STEP 6 — Build unsigned APK
       - name: Build unsigned APK
         run: |
-          apktool b work -o Camera-unsigned.apk
-          ls -lh Camera-unsigned.apk
-
+           export JAVA_OPTS="-Xmx6g"
+           apktool b work -o Camera-unsigned.apk
+    
       # STEP 7 — Upload unsigned APK
       - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
