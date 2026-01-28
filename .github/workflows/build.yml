@@ -18,13 +18,23 @@ jobs:
           java-version: 17
 
       # 3. Install Android SDK Commandline Tools
-      - name: Install SDK packages
+      - name: Install Android SDK
         run: |
-         yes | sdkmanager --licenses
-         sdkmanager \
-             "platform-tools" \
-             "platforms;android-34" \
-             "build-tools;34.0.0"
+          sudo apt update
+          sudo apt install -y unzip wget
+
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
+
+          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+
+          unzip commandlinetools-linux-11076708_latest.zip
+
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools/* cmdline-tools/latest/
+
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools" >> $GITHUB_ENV
 
       # 4. Install platform & build-tools
       - name: Install SDK packages
@@ -93,4 +103,3 @@ jobs:
         with:
           name: Camera-Wrapper-APK
           path: build/Camera-wrapper-signed.apk
-          
