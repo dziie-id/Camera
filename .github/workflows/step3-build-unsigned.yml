@@ -1,0 +1,45 @@
+name: Step 3 - Build Unsigned Camera APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID dari workflow Fetch & Decode"
+        required: true
+
+jobs:
+  build-unsigned:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download decoded artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gcamgo-decoded
+          path: work/gcamgo_decoded
+          run-id: ${{ github.event.inputs.run_id }}
+          repository: dziie-id/Camera
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install apktool
+        run: |
+          sudo apt update
+          sudo apt install -y apktool
+
+      - name: Build unsigned APK
+        run: |
+          apktool b work/gcamgo_decoded -o Camera-unsigned.apk
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: camera-unsigned
+          path: Camera-unsigned.apk
