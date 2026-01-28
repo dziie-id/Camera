@@ -1,1 +1,55 @@
 
+name: Build Camera Wrapper (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_id:
+        description: 'Nama Paket (Package ID)'
+        required: true
+        default: 'org.lineageos.aperture'
+      version_name:
+        description: 'Nama Versi (Version Name)'
+        required: true
+        default: '16'
+      version_code:
+        description: 'Kode Versi (Version Code)'
+        required: true
+        default: '36'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant Execute Permission for Gradle
+        run: chmod +x gradlew
+
+      - name: Inject Custom Config
+        run: |
+          # Mengganti nilai di build.gradle berdasarkan input user
+          sed -i "s/def appPackageId = .*/def appPackageId = \"${{ github.event.inputs.package_id }}\"/g" app/build.gradle
+          sed -i "s/def appVersionName = .*/def appVersionName = \"${{ github.event.inputs.version_name }}\"/g" app/build.gradle
+          sed -i "s/def appVersionCode = .*/def appVersionCode = ${{ github.event.inputs.version_code }}/g" app/build.gradle
+          
+          # Mengganti package name di AndroidManifest
+          sed -i "s/package=\".*\"/package=\"${{ github.event.inputs.package_id }}\"/g" app/src/main/AndroidManifest.xml
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: Camera-Wrapper-${{ github.event.inputs.package_id }}
+          path: app/build/outputs/apk/debug/*.apk
+          
