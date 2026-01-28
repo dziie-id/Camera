@@ -1,5 +1,5 @@
 plugins {
-    id 'com.android.application'
+    id "com.android.application"
 }
 
 android {
@@ -8,6 +8,7 @@ android {
 
     defaultConfig {
         applicationId "org.lineageos.aperture"
+
         minSdk 26
         targetSdk 34
 
@@ -17,10 +18,10 @@ android {
 
     signingConfigs {
         release {
-            storeFile file("../keystore/Key.jks")
-            storePassword "password"
-            keyAlias "key0"
-            keyPassword "password"
+            storeFile file("../keystore/Key.pk8")
+            storePassword ""
+            keyAlias "platform"
+            keyPassword ""
         }
     }
 
@@ -28,10 +29,19 @@ android {
         release {
             signingConfig signingConfigs.release
             minifyEnabled false
+            shrinkResources false
         }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }
 
 dependencies {
-    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation "androidx.appcompat:appcompat:1.6.1"
 }
