@@ -1,89 +1,114 @@
-package com.wrapper.camera;
+package org.lineageos.aperture;
 
-import android.app.Activity;
-import android.content.Intent;
-import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.widget.ImageButton;
 
-import androidx.core.content.FileProvider;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageCapture;
+import androidx.camera.core.ImageCaptureException;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+import androidx.core.content.ContextCompat;
+
+import com.google.common.util.concurrent.ListenableFuture;
 
 import java.io.File;
-import java.io.FileOutputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class CameraActivity extends Activity {
+public class CameraActivity extends AppCompatActivity {
 
-    private static final int REQ_GCAM = 1001;
-    private float currentZoom = 1.0f;
-    private Uri cacheUri;
+    private PreviewView previewView;
+    private ImageCapture imageCapture;
+    private ExecutorService cameraExecutor;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
 
-        ImageButton btnShutter = findViewById(R.id.btn_shutter);
-        ImageButton btnZoom1x = findViewById(R.id.btn_zoom_1x);
-        ImageButton btnZoomUw = findViewById(R.id.btn_zoom_uw);
+        previewView = findViewById(R.id.previewView);
+        ImageButton shutter = findViewById(R.id.btnShutter);
 
-        btnZoom1x.setOnClickListener(v -> currentZoom = 1.0f);
-        btnZoomUw.setOnClickListener(v -> currentZoom = 0.7f);
+        cameraExecutor = Executors.newSingleThreadExecutor();
+        startCamera();
 
-        btnShutter.setOnClickListener(v -> {
-            cacheUri = createCacheUri();
-            Intent intent = GcamLauncher.buildIntent(this, currentZoom, cacheUri);
-            startActivityForResult(intent, REQ_GCAM);
-        });
+        shutter.setOnClickListener(v -> takePhoto());
+    }
+
+    private void startCamera() {
+        ListenableFuture<ProcessCameraProvider> cameraProviderFuture =
+                ProcessCameraProvider.getInstance(this);
+
+        cameraProviderFuture.addListener(() -> {
+            try {
+                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+
+                Preview preview = new Preview.Builder().build();
+                preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                imageCapture = new ImageCapture.Builder()
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                        .build();
+
+                CameraSelector selector = new CameraSelector.Builder()
+                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                        .build();
+
+                cameraProvider.unbindAll();
+                cameraProvider.bindToLifecycle(
+                        this,
+                        selector,
+                        preview,
+                        imageCapture
+                );
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    private void takePhoto() {
+        if (imageCapture == null) return;
+
+        File photoFile = new File(
+                getCacheDir(),
+                "capture_" + System.currentTimeMillis() + ".jpg"
+        );
+
+        ImageCapture.OutputFileOptions options =
+                new ImageCapture.OutputFileOptions.Builder(photoFile).build();
+
+        imageCapture.takePicture(
+                options,
+                ContextCompat.getMainExecutor(this),
+                new ImageCapture.OnImageSavedCallback() {
+
+                    @Override
+                    public void onImageSaved(
+                            @NonNull ImageCapture.OutputFileResults output) {
+                        Uri uri = Uri.fromFile(photoFile);
+                        setResult(RESULT_OK);
+                        finish();
+                    }
+
+                    @Override
+                    public void onError(
+                            @NonNull ImageCaptureException exception) {
+                        exception.printStackTrace();
+                    }
+                }
+        );
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == REQ_GCAM && resultCode == RESULT_OK && cacheUri != null) {
-            processPhoto(cacheUri);
-
-            Intent result = new Intent();
-            result.setData(cacheUri);
-            result.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            setResult(RESULT_OK, result);
-            finish();
-        } else {
-            setResult(RESULT_CANCELED);
-            finish();
-        }
-    }
-
-    private Uri createCacheUri() {
-        try {
-            File file = new File(getCacheDir(), "capture.jpg");
-            return FileProvider.getUriForFile(
-                    this,
-                    getPackageName() + ".provider",
-                    file
-            );
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private void processPhoto(Uri uri) {
-        try {
-            Bitmap bitmap = MediaStore.Images.Media.getBitmap(
-                    getContentResolver(), uri
-            );
-
-            Bitmap watermarked = WatermarkUtil.apply(bitmap);
-
-            FileOutputStream fos =
-                    new FileOutputStream(new File(getCacheDir(), "capture.jpg"));
-            watermarked.compress(Bitmap.CompressFormat.JPEG, 85, fos);
-            fos.close();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    protected void onDestroy() {
+        super.onDestroy();
+        cameraExecutor.shutdown();
     }
 }
