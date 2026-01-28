@@ -29,8 +29,8 @@ jobs:
       run: |
         mkdir -p out/classes
         javac \
-          -source 11 -target 11 \
-          -bootclasspath $ANDROID_HOME/platforms/android-34/android.jar \
+          --release 11 \
+          -classpath $ANDROID_HOME/platforms/android-34/android.jar \
           -d out/classes \
           app/WrapperActivity.java
 
