@@ -41,6 +41,9 @@ public class CameraActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);
+
         setContentView(R.layout.activity_camera);
 
         previewView = findViewById(R.id.previewView);
