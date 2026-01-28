@@ -1,19 +1,18 @@
-
 name: Build Camera Wrapper (Manual)
 
 on:
   workflow_dispatch:
     inputs:
       package_id:
-        description: 'Nama Paket (Package ID)'
+        description: 'Nama Paket (Contoh: org.lineageos.aperture)'
         required: true
         default: 'org.lineageos.aperture'
       version_name:
-        description: 'Nama Versi (Version Name)'
+        description: 'Nama Versi (Contoh: 16)'
         required: true
         default: '16'
       version_code:
-        description: 'Kode Versi (Version Code)'
+        description: 'Kode Versi (Contoh: 36)'
         required: true
         default: '36'
 
@@ -29,19 +28,15 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Grant Execute Permission for Gradle
-        run: chmod +x gradlew
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.2
 
       - name: Inject Custom Config
         run: |
-          # Mengganti nilai di build.gradle berdasarkan input user
           sed -i "s/def appPackageId = .*/def appPackageId = \"${{ github.event.inputs.package_id }}\"/g" app/build.gradle
           sed -i "s/def appVersionName = .*/def appVersionName = \"${{ github.event.inputs.version_name }}\"/g" app/build.gradle
           sed -i "s/def appVersionCode = .*/def appVersionCode = ${{ github.event.inputs.version_code }}/g" app/build.gradle
-          
-          # Mengganti package name di AndroidManifest
           sed -i "s/package=\".*\"/package=\"${{ github.event.inputs.package_id }}\"/g" app/src/main/AndroidManifest.xml
 
       - name: Build Debug APK
