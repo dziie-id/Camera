@@ -1,48 +1,50 @@
 import os
+import xml.etree.ElementTree as ET
 
-# Lokasi folder smali
-path = "workdir/smali/"
+# Lokasi file target
+xml_path = "workdir/res/values/bools.xml"
 
-def ganti_kode(label, keyword, lama, baru):
-    count = 0
-    for root, dirs, files in os.walk(path):
-        for file in files:
-            if file.endswith(".smali"):
-                f_path = os.path.join(root, file)
-                try:
-                    with open(f_path, 'r') as f:
-                        data = f.read()
-                    
-                    if keyword in data and lama in data:
-                        data = data.replace(lama, baru)
-                        with open(f_path, 'w') as f:
-                            f.write(data)
-                        count += 1
-                except Exception:
-                    continue
-    if count > 0:
-        print(f"[+] {label}: Berhasil sodok {count} titik.")
+def sodok_xml():
+    if not os.path.exists(xml_path):
+        print(f"[-] Error: {xml_path} gak ketemu bray!")
+        return
 
-# --- EKSEKUSI MODIFIKASI SULTAN ---
+    print("[+] Memulai ritual sodok XML...")
+    
+    # Daftar fitur yang mau kita paksa jadi TRUE
+    target_fitur = [
+        "is_hdr_supported",
+        "is_night_mode_supported",
+        "is_portrait_supported",
+        "is_aux_supported",
+        "is_multiple_cameras_supported",
+        "is_wide_angle_supported",
+        "is_google_lens_supported",
+        "is_storage_saver_supported"
+    ]
 
-print("--- Memulai Ritual Penodokan Note 13 ---")
+    with open(xml_path, 'r') as f:
+        lines = f.readlines()
 
-# 1. Aktifin Fitur Inti (HDR, Night Mode, Portrait)
-ganti_kode("HDR+", "isHdrSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
-ganti_kode("NIGHT MODE", "isNightModeSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
-ganti_kode("PORTRAIT", "isPortraitSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
+    new_lines = []
+    for line in lines:
+        updated = False
+        for fitur in target_fitur:
+            if f'name="{fitur}"' in line:
+                # Ganti false jadi true
+                new_line = line.replace("false", "true")
+                new_lines.append(new_line)
+                print(f"[!] Aktifin Fitur: {fitur}")
+                updated = True
+                break
+        if not updated:
+            new_lines.append(line)
 
-# 2. Aktifin Lensa Tambahan (AUX/Wide/Macro)
-ganti_kode("AUX CARDS", "isAuxiliaryCardsSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
-ganti_kode("MULTI CAM", "isMultipleCamerasSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
-ganti_kode("WIDE ANGLE", "isWideAngleSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
+    with open(xml_path, 'w') as f:
+        f.writelines(new_lines)
 
-# 3. Manipulasi Device Profile (Bypass Biar Gak FC di Xiaomi)
-# Kita paksa sistem ngerasa ini Pixel 4a biar library HDR+ nya mau jalan
-ganti_kode("DEVICE SPOOF", "getDeviceModel", "const-string v0, ", "const-string v0, \"Pixel 4a\" #")
+    print("[+] Ritual XML selesai!")
 
-# 4. Aktifin Google Lens & Storage Saver
-ganti_kode("G-LENS", "isGoogleLensSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
-ganti_kode("STORAGE SAVER", "isStorageSaverSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
-
-print("--- Ritual Selesai! Gas Rakit Bray! ---")
+if __name__ == "__main__":
+    sodok_xml()
+    
