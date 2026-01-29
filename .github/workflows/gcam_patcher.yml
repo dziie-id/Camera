@@ -1,0 +1,81 @@
+name: GCam Go Aux Patcher
+on:
+  workflow_dispatch: # Biar bisa lu klik "Run" manual dari HP
+
+jobs:
+  patch_and_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Java & Python
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'zulu'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          mkdir -p bin
+          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O bin/apktool.jar
+          echo "java -jar $GITHUB_WORKSPACE/bin/apktool.jar \$@" > bin/apktool
+          chmod +x bin/apktool
+          echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
+
+      - name: Download GCam Go Basis
+        run: |
+          # Kita pake versi 3.8.47 yang stabil buat ditarik via wget
+          # Ganti URL ini kalau lu punya link direct APK lain
+          mkdir -p input
+          wget -O input/base_gcam.apk "https://www.celsoazevedo.com/files/android/google-camera/f/changelog1530/GCamGo_3.8.47_Greatness_221115.apk"
+
+      - name: Decompile APK
+        run: apktool d input/base_gcam.apk -o workdir
+
+      - name: Inject Aux Support (Python Script)
+        run: |
+          cat << 'EOF' > patch_script.py
+          import os
+          import re
+
+          def modify_files():
+              # Lokasi file smali yang biasanya ngatur Camera ID di GCam Go
+              # Kita inject ID 2, 3, dan 4 biar kebaca
+              target_dir = "workdir/smali"
+              
+              for root, dirs, files in os.walk(target_dir):
+                  for file in files:
+                      if file.endswith(".smali"):
+                          path = os.path.join(root, file)
+                          with open(path, "r") as f:
+                              content = f.read()
+                          
+                          # Sodok logika: Ubah limit ID kamera dari 2 (0,1) jadi 5 (0,1,2,3,4)
+                          if "const/4 v0, 0x2" in content:
+                              new_content = content.replace("const/4 v0, 0x2", "const/4 v0, 0x5")
+                              with open(path, "w") as f:
+                                  f.write(new_content)
+              
+              print("Patching logic Aux selesai...")
+
+          modify_files()
+          EOF
+          python3 patch_script.py
+
+      - name: Rebuild and Sign APK
+        run: |
+          apktool b workdir -o output/GCamGo_Aux_Patched.apk
+          # Generate debug key buat tanda tangan APK biar bisa diinstall
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          
+          # Pakai jarsigner (bawaan JDK)
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore debug.keystore -storepass android output/GCamGo_Aux_Patched.apk androiddebugkey
+
+      - name: Upload APK ke Release/Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: GCam-Go-Aux-Result
+          path: output/GCamGo_Aux_Patched.apk
