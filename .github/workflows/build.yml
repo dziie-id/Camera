@@ -28,14 +28,11 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: Grant Execute Permission
-        run: chmod +x gradlew
-
-      - name: Build with Custom Config
+      # Kita pakai gradle bawaan runner, nggak usah chmod gradlew
+      - name: Build with Gradle
         run: |
-          ./gradlew assembleDebug \
+          gradle assembleDebug \
             -PcustomPackageName=${{ github.event.inputs.package_name }} \
             -PcustomVersionName=${{ github.event.inputs.version_name }} \
             -PcustomVersionCode=${{ github.event.inputs.version_code }}
