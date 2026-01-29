@@ -1,43 +1,31 @@
 import os
-import re
 
-def sodok_file(file_path, daftar_ganti):
-    if not os.path.exists(file_path): return
-    with open(file_path, 'r') as f:
-        data = f.read()
-    for lama, baru in daftar_ganti.items():
-        data = re.sub(lama, baru, data)
-    with open(file_path, 'w') as f:
-        f.write(data)
+def tweak_shamim():
+    # File config Shamim biasanya beda tempat
+    paths = [
+        "workdir/res/values/bools.xml",
+        "workdir/res/values/integers.xml",
+        "workdir/res/xml/preferences_camera.xml" # Shamim sering naruh di sini
+    ]
 
-# --- CONFIG KHUSUS SAPPHIRE ---
-# Kita coba cara paling halus tapi mematikan
+    for path in paths:
+        if not os.path.exists(path): continue
+        with open(path, 'r') as f:
+            data = f.read()
+        
+        # Aktifin fitur yang mungkin masih off
+        data = data.replace('name="is_hdr_supported">false', 'name="is_hdr_supported">true')
+        data = data.replace('name="is_aux_supported">false', 'name="is_aux_supported">true')
+        
+        # Paksa ID 2 atau 4 (sesuai log lu) langsung di config
+        if "integers.xml" in path:
+            data = data.replace('name="aux_camera_id">0', 'name="aux_camera_id">2')
+            data = data.replace('name="back_camera_number">1', 'name="back_camera_number">3')
 
-bools_path = "workdir/res/values/bools.xml"
-ganti_bools = {
-    r'name="is_hdr_supported">.*?<': 'name="is_hdr_supported">true<',
-    r'name="is_night_mode_supported">.*?<': 'name="is_night_mode_supported">true<',
-    r'name="is_aux_supported">.*?<': 'name="is_aux_supported">true<',
-    r'name="is_wide_angle_supported">.*?<': 'name="is_wide_angle_supported">true<'
-}
+        with open(path, 'w') as f:
+            f.write(data)
+        print(f"[+] Shamim Tweaked: {path}")
 
-integers_path = "workdir/res/values/integers.xml"
-ganti_integers = {
-    # Paksa sistem anggap ada 2 kamera belakang yang setara
-    r'name="back_camera_number">.*?<': 'name="back_camera_number">2<',
-    # Coba pake ID 2 (Wide lu) sebagai AUX utama
-    r'name="aux_camera_id">.*?<': 'name="aux_camera_id">2<'
-}
-
-# Kadang di Android 14+ perlu pancingan di strings
-strings_path = "workdir/res/values/strings.xml"
-ganti_strings = {
-    # Paksa string key buat aux jadi 'true' atau berisi ID
-    r'name="pref_camera_aux_key">.*?<': 'name="pref_camera_aux_key">true<'
-}
-
-print("--- Menjalankan Operasi Penyamaran ---")
-sodok_file(bools_path, ganti_bools)
-sodok_file(integers_path, ganti_integers)
-sodok_file(strings_path, ganti_strings)
-print("--- Selesai! Cobain bray! ---")
+if __name__ == "__main__":
+    tweak_shamim()
+    
