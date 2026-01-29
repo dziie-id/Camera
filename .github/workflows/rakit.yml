@@ -16,8 +16,8 @@ jobs:
           sudo ln -sf ${ANDROID_SDK_ROOT}/build-tools/34.0.0/aapt2 /usr/local/bin/aapt2
           wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O apktool.jar
 
-      - name: Download APK Bahan
-        run: wget "https://github.com/Evolution-X-AOSP/packages_apps_GCamGOPrebuilt/raw/refs/heads/udc/GCamGOPrebuilt-V3_8.apk" -O base.apk
+      - name: Download APK Shamim (Base Sultan)
+        run: wget "https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_cameralite.apk" -O base.apk
 
       - name: Decompile (Hanya Resource)
         # PAKE -s BIAR DEX GAK RUSAK (ANTI-FC)
