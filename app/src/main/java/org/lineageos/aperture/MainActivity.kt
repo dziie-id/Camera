@@ -5,59 +5,76 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
-import android.os.Environment
+import android.view.Gravity
 import android.widget.FrameLayout
+import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import java.io.File
-import java.io.FileOutputStream
 import java.io.PrintWriter
 import java.io.StringWriter
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var viewFinder: PreviewView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // TANGKAP ERROR DAN SIMPAN KE FILE TXT
+        // TANGKAP ERROR (LOGCAT MANUAL)
         Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
             val sw = StringWriter()
             throwable.printStackTrace(PrintWriter(sw))
-            val log = sw.toString()
-
-            try {
-                // Simpan ke folder Download agar mudah dicari
-                val path = Environment.getExternalContext().path + "/Download/kamera_crash.txt"
-                val file = File(path)
-                FileOutputStream(file).use { it.write(log.toByteArray()) }
-            } catch (e: Exception) {
-                // Jika folder publik gagal, simpan ke folder internal app
-                val file = File(getExternalFilesDir(null), "crash_log.txt")
-                FileOutputStream(file).use { it.write(log.toByteArray()) }
-            }
-            
+            val pref = getSharedPreferences("DEBUG_LOG", Context.MODE_PRIVATE)
+            pref.edit().putString("last_crash", sw.toString()).apply()
             android.os.Process.killProcess(android.os.Process.myPid())
         }
 
-        // TAMPILAN STANDAR BIAR GAK KOSONG
-        val root = FrameLayout(this)
-        val tv = TextView(this).apply {
-            text = "Kamera Sedang Inisialisasi...\nCek file kamera_crash.txt di folder Download jika app menutup."
-            setTextColor(Color.WHITE)
-            setGravity(android.view.Gravity.CENTER)
+        // TAMPILKAN DIALOG JIKA ADA CRASH
+        val pref = getSharedPreferences("DEBUG_LOG", Context.MODE_PRIVATE)
+        val logs = pref.getString("last_crash", null)
+        if (logs != null) {
+            val tv = TextView(this).apply {
+                text = logs
+                setTextColor(Color.RED)
+                setPadding(40, 40, 40, 40)
+                textSize = 10f
+            }
+            val scroll = ScrollView(this).apply { addView(tv) }
+            
+            AlertDialog.Builder(this)
+                .setTitle("Screenshot Error Ini Bang!")
+                .setView(scroll)
+                .setPositiveButton("Hapus & Lanjut") { _, _ ->
+                    pref.edit().remove("last_crash").apply()
+                }
+                .show()
         }
-        root.addView(tv)
+
+        // UI DASAR
+        val root = FrameLayout(this)
+        viewFinder = PreviewView(this)
+        root.addView(viewFinder)
+        
+        val statusText = TextView(this).apply {
+            text = "Kamera Siap..."
+            setTextColor(Color.WHITE)
+            layoutParams = FrameLayout.LayoutParams(-2, -2).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL }
+        }
+        root.addView(statusText)
+
         setContentView(root)
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+        if (allPermissionsGranted()) {
             startCamera()
         } else {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE), 10)
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 10)
         }
     }
 
@@ -66,11 +83,22 @@ class MainActivity : AppCompatActivity() {
         cameraProviderFuture.addListener({
             try {
                 val cameraProvider = cameraProviderFuture.get()
-                // Kita panggil paksa error buat ngetes log jika perlu
-                // throw RuntimeException("Tes Log Manual") 
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(viewFinder.surfaceProvider)
+                }
+                cameraProvider.unbindAll()
+                cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview)
             } catch (e: Exception) {
-                // Handle error
+                // Jangan crash, tampilin error di layar aja
+                Toast(e.stackTraceToString())
             }
         }, ContextCompat.getMainExecutor(this))
     }
+
+    private fun Toast(msg: String) {
+        android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_LONG).show()
+    }
+
+    private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(
+        baseContext, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 }
