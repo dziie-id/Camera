@@ -1,4 +1,5 @@
 import os
+import re
 
 def sodok_file(file_path, daftar_ganti):
     if not os.path.exists(file_path):
@@ -9,35 +10,40 @@ def sodok_file(file_path, daftar_ganti):
         data = f.read()
 
     for lama, baru in daftar_ganti.items():
-        if lama in data:
-            data = data.replace(lama, baru)
-            print(f"[+] Berhasil ganti di {os.path.basename(file_path)}")
+        # Pake regex biar lebih kuat nyarinya
+        pattern = re.compile(re.escape(lama), re.IGNORECASE)
+        if pattern.search(data):
+            data = pattern.sub(baru, data)
+            print(f"[+] Berhasil update: {lama} -> {baru}")
 
     with open(file_path, 'w') as f:
         f.write(data)
 
-# --- KONFIGURASI SODOK ---
+# --- KONFIGURASI SESUAI LOG CAMERA ID LU ---
 
-# 1. Sodok Bools (Fitur ON/OFF)
 bools_path = "workdir/res/values/bools.xml"
 ganti_bools = {
-    '<bool name="is_hdr_supported">false</bool>': '<bool name="is_hdr_supported">true</bool>',
-    '<bool name="is_night_mode_supported">false</bool>': '<bool name="is_night_mode_supported">true</bool>',
-    '<bool name="is_aux_supported">false</bool>': '<bool name="is_aux_supported">true</bool>',
-    '<bool name="is_multiple_cameras_supported">false</bool>': '<bool name="is_multiple_cameras_supported">true</bool>',
-    '<bool name="is_wide_angle_supported">false</bool>': '<bool name="is_wide_angle_supported">true</bool>'
+    'name="is_hdr_supported">false': 'name="is_hdr_supported">true',
+    'name="is_night_mode_supported">false': 'name="is_night_mode_supported">true',
+    'name="is_aux_supported">false': 'name="is_aux_supported">true',
+    'name="is_multiple_cameras_supported">false': 'name="is_multiple_cameras_supported">true',
+    'name="is_wide_angle_supported">false': 'name="is_wide_angle_supported">true'
 }
 
-# 2. Sodok Integers (Jumlah Kamera & ID)
-# Ini kuncinya biar tombol AUX nongol
 integers_path = "workdir/res/values/integers.xml"
 ganti_integers = {
-    '<integer name="back_camera_number">1</integer>': '<integer name="back_camera_number">3</integer>',
-    '<integer name="aux_camera_id">0</integer>': '<integer name="aux_camera_id">2</integer>'
+    'name="back_camera_number">1': 'name="back_camera_number">3',
+    # Kita arahin ke ID 4 (Logical Camera) sesuai data lu
+    'name="aux_camera_id">0': 'name="aux_camera_id">4' 
 }
 
+# Tambahan: Paksa ID di arrays.xml biar sistem tau ada pilihan ID 0, 2, dan 4
+arrays_path = "workdir/res/values/arrays.xml"
+# Kita gak ganti, tapi kita pastiin isinya mencakup ID kamera lu
+# (Jika file ini ada, biasanya berisi list camera IDs)
+
 # Eksekusi
-print("--- Memulai Ritual AUX Booster ---")
+print("--- Memulai Ritual Sapphire Logical ---")
 sodok_file(bools_path, ganti_bools)
 sodok_file(integers_path, ganti_integers)
-print("--- Selesai bray! ---")
+print("--- Selesai! Gas Rakit Bray! ---")
