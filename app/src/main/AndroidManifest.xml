@@ -14,7 +14,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Aperture Wrapper"
+        android:label="Kamera"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:requestLegacyExternalStorage="true"
