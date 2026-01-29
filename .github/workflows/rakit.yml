@@ -10,11 +10,20 @@ jobs:
     steps:
       - name: Ambil Script
         uses: actions/checkout@v4
-
+        
       - name: Install Java dan Alat
         run: |
           sudo apt-get update
-          sudo apt-get install -y aapt2 apksigner python3 wget
+          # Kita cuma install Java dan Apksigner, aapt2 kita ambil jalur lain
+          sudo apt-get install -y openjdk-17-jdk-headless apksigner python3 wget
+          
+          # Download aapt2 dari Google langsung (versi Linux)
+          wget https://dl.google.com/android/repository/repository2-1.xml # Cuma buat pancingan
+          # Cara simpel: Kita suruh apktool cari aapt2 sendiri atau pake aapt2 statis
+          wget https://github.com/muntashirakon/aapt2-static/raw/master/bin/linux/x86_64/aapt2 -O /usr/local/bin/aapt2
+          sudo chmod +x /usr/local/bin/aapt2
+          
+          # Download Apktool
           wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
 
       - name: Download APK Bahan
