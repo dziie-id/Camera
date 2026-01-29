@@ -6,10 +6,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Ambil Script
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Java dan Alat
+      - name: Install Alat Tempur
         run: |
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jdk-headless apksigner zipalign python3 wget
@@ -19,25 +19,27 @@ jobs:
       - name: Download APK Bahan
         run: wget "https://github.com/Evolution-X-AOSP/packages_apps_GCamGOPrebuilt/raw/refs/heads/udc/GCamGOPrebuilt-V3_8.apk" -O base.apk
 
-      - name: Proses Decompile
-        run: java -jar apktool.jar d base.apk -o workdir
+      - name: Decompile (Hanya Resource)
+        # PAKE -s BIAR DEX GAK RUSAK (ANTI-FC)
+        run: java -jar apktool.jar d -s base.apk -o workdir
 
-      - name: Eksekusi Script Sodok
+      - name: Eksekusi Sodok XML
         run: python3 sodok.py
 
       - name: Rakit Ulang
         run: java -jar apktool.jar b workdir --use-aapt2 -o unsigned.apk
 
-      - name: Zipalign (Merapikan File)
+      - name: Zipalign
         run: zipalign -v 4 unsigned.apk aligned.apk
 
-      - name: Tanda Tangan (Signing)
+      - name: Signing
         run: |
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          apksigner sign --ks debug.keystore --ks-pass pass:android --out hasil_sultan.apk aligned.apk
+          apksigner sign --ks debug.keystore --ks-pass pass:android --out GCam_Sultan_Sapphire.apk aligned.apk
 
-      - name: Simpan Hasil Jadi
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: GCam-Sultan-Note13
-          path: hasil_sultan.apk
+          name: GCam-Sultan-Sapphire
+          path: GCam_Sultan_Sapphire.apk
+          
