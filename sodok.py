@@ -1,50 +1,43 @@
 import os
-import xml.etree.ElementTree as ET
 
-# Lokasi file target
-xml_path = "workdir/res/values/bools.xml"
-
-def sodok_xml():
-    if not os.path.exists(xml_path):
-        print(f"[-] Error: {xml_path} gak ketemu bray!")
+def sodok_file(file_path, daftar_ganti):
+    if not os.path.exists(file_path):
+        print(f"[-] File {file_path} gak ada, skip.")
         return
 
-    print("[+] Memulai ritual sodok XML...")
-    
-    # Daftar fitur yang mau kita paksa jadi TRUE
-    target_fitur = [
-        "is_hdr_supported",
-        "is_night_mode_supported",
-        "is_portrait_supported",
-        "is_aux_supported",
-        "is_multiple_cameras_supported",
-        "is_wide_angle_supported",
-        "is_google_lens_supported",
-        "is_storage_saver_supported"
-    ]
+    with open(file_path, 'r') as f:
+        data = f.read()
 
-    with open(xml_path, 'r') as f:
-        lines = f.readlines()
+    for lama, baru in daftar_ganti.items():
+        if lama in data:
+            data = data.replace(lama, baru)
+            print(f"[+] Berhasil ganti di {os.path.basename(file_path)}")
 
-    new_lines = []
-    for line in lines:
-        updated = False
-        for fitur in target_fitur:
-            if f'name="{fitur}"' in line:
-                # Ganti false jadi true
-                new_line = line.replace("false", "true")
-                new_lines.append(new_line)
-                print(f"[!] Aktifin Fitur: {fitur}")
-                updated = True
-                break
-        if not updated:
-            new_lines.append(line)
+    with open(file_path, 'w') as f:
+        f.write(data)
 
-    with open(xml_path, 'w') as f:
-        f.writelines(new_lines)
+# --- KONFIGURASI SODOK ---
 
-    print("[+] Ritual XML selesai!")
+# 1. Sodok Bools (Fitur ON/OFF)
+bools_path = "workdir/res/values/bools.xml"
+ganti_bools = {
+    '<bool name="is_hdr_supported">false</bool>': '<bool name="is_hdr_supported">true</bool>',
+    '<bool name="is_night_mode_supported">false</bool>': '<bool name="is_night_mode_supported">true</bool>',
+    '<bool name="is_aux_supported">false</bool>': '<bool name="is_aux_supported">true</bool>',
+    '<bool name="is_multiple_cameras_supported">false</bool>': '<bool name="is_multiple_cameras_supported">true</bool>',
+    '<bool name="is_wide_angle_supported">false</bool>': '<bool name="is_wide_angle_supported">true</bool>'
+}
 
-if __name__ == "__main__":
-    sodok_xml()
-    
+# 2. Sodok Integers (Jumlah Kamera & ID)
+# Ini kuncinya biar tombol AUX nongol
+integers_path = "workdir/res/values/integers.xml"
+ganti_integers = {
+    '<integer name="back_camera_number">1</integer>': '<integer name="back_camera_number">3</integer>',
+    '<integer name="aux_camera_id">0</integer>': '<integer name="aux_camera_id">2</integer>'
+}
+
+# Eksekusi
+print("--- Memulai Ritual AUX Booster ---")
+sodok_file(bools_path, ganti_bools)
+sodok_file(integers_path, ganti_integers)
+print("--- Selesai bray! ---")
