@@ -34,12 +34,13 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // UI Tanpa XML Layout (Full Code)
+        // UI Programmatic (Tanpa XML)
         val root = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
+            setBackgroundColor(Color.BLACK)
         }
 
         viewFinder = PreviewView(this).apply {
@@ -53,8 +54,8 @@ class MainActivity : AppCompatActivity() {
         // Tombol Shutter (Tengah Bawah)
         val shutterBtn = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_camera)
-            setBackgroundColor(Color.parseColor("#80FFFFFF")) // Transparan putih
-            layoutParams = FrameLayout.LayoutParams(200, 200).apply {
+            setBackgroundColor(Color.parseColor("#4DFFFFFF")) // Transparan
+            layoutParams = FrameLayout.LayoutParams(180, 180).apply {
                 gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
                 bottomMargin = 100
             }
@@ -62,17 +63,19 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(shutterBtn)
 
-        // Tombol Switch (Kiri Bawah)
+        // Tombol Switch Lensa (Kiri Bawah)
         val switchBtn = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_rotate)
-            setBackgroundColor(Color.parseColor("#80FFFFFF"))
-            layoutParams = FrameLayout.LayoutParams(150, 150).apply {
+            setBackgroundColor(Color.parseColor("#4DFFFFFF"))
+            layoutParams = FrameLayout.LayoutParams(130, 130).apply {
                 gravity = Gravity.BOTTOM or Gravity.START
-                leftMargin = 100
+                leftMargin = 80
                 bottomMargin = 125
             }
             setOnClickListener {
                 isUltraWide = !isUltraWide
+                val mode = if (isUltraWide) "Ultra Wide" else "Main"
+                Toast.makeText(context, "Mode: $mode", Toast.LENGTH_SHORT).show()
                 startCamera()
             }
         }
@@ -80,6 +83,7 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(root)
 
+        // Izin Kamera
         if (allPermissionsGranted()) {
             startCamera()
         } else {
@@ -98,14 +102,17 @@ class MainActivity : AppCompatActivity() {
                 it.setSurfaceProvider(viewFinder.surfaceProvider)
             }
 
-            imageCapture = ImageCapture.Builder().build()
+            imageCapture = ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                .build()
 
-            // Filter Lensa: Mencoba cari lensa Ultra Wide kalau isUltraWide true
+            // Filter Lensa Ultra Wide
             val cameraSelector = if (isUltraWide) {
-                CameraSelector.Builder().addCameraFilter { cameras ->
-                    cameras.filter { cam -> 
-                        val id = cam.cameraInfo.toString().lowercase()
-                        id.contains("id: 2") || id.contains("back 2")
+                CameraSelector.Builder().addCameraFilter { cameraInfos ->
+                    cameraInfos.filter { info ->
+                        val details = info.toString().lowercase()
+                        // Mencoba deteksi ID Lensa ke-2 atau Auxiliary
+                        details.contains("id: 2") || details.contains("back 2") || details.contains("back 1")
                     }
                 }.build()
             } else {
@@ -116,7 +123,7 @@ class MainActivity : AppCompatActivity() {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
             } catch (exc: Exception) {
-                // Balik ke kamera Utama kalau UW gagal
+                // Fallback ke kamera utama jika gagal
                 cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture)
             }
         }, ContextCompat.getMainExecutor(this))
@@ -124,6 +131,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
+        
+        // Nama file berdasarkan waktu
         val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(System.currentTimeMillis())
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
@@ -137,13 +146,14 @@ class MainActivity : AppCompatActivity() {
             contentResolver, MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues
         ).build()
 
+        // Jepret (Senyap/Silent by default di CameraX jika tidak ada audio player)
         imageCapture.takePicture(outputOptions, ContextCompat.getMainExecutor(this),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                    Toast.makeText(baseContext, "Berhasil simpan!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(baseContext, "Foto Berhasil!", Toast.LENGTH_SHORT).show()
                 }
                 override fun onError(exc: ImageCaptureException) {
-                    Toast.makeText(baseContext, "Gagal simpan", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(baseContext, "Gagal: ${exc.message}", Toast.LENGTH_SHORT).show()
                 }
             }
         )
