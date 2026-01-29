@@ -1,6 +1,6 @@
 name: Rakit GCam Sultan Manual
 on:
-  workflow_dispatch: # HANYA JALAN KALAU DIKLIK MANUAL
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,18 +12,12 @@ jobs:
       - name: Install Java dan Alat
         run: |
           sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk-headless apksigner python3 wget
-          
-          # Ambil aapt2 dari Android SDK bawaan GitHub
+          sudo apt-get install -y openjdk-17-jdk-headless apksigner zipalign python3 wget
           sudo ln -sf ${ANDROID_SDK_ROOT}/build-tools/34.0.0/aapt2 /usr/local/bin/aapt2
-          
-          # Download Apktool v2.9.3 dari GitHub (Link Resmi & Stabil)
           wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O apktool.jar
 
       - name: Download APK Bahan
-        run: |
-          # GANTI LINK DI BAWAH PAKE LINK APK LU (Pake direct link!)
-          wget "https://github.com/Evolution-X-AOSP/packages_apps_GCamGOPrebuilt/raw/refs/heads/udc/GCamGOPrebuilt-V3_8.apk" -O base.apk
+        run: wget "https://github.com/Evolution-X-AOSP/packages_apps_GCamGOPrebuilt/raw/refs/heads/udc/GCamGOPrebuilt-V3_8.apk" -O base.apk
 
       - name: Proses Decompile
         run: java -jar apktool.jar d base.apk -o workdir
@@ -34,23 +28,16 @@ jobs:
       - name: Rakit Ulang
         run: java -jar apktool.jar b workdir --use-aapt2 -o unsigned.apk
 
-      - name: Optimasi dan Tanda Tangan
+      - name: Zipalign (Merapikan File)
+        run: zipalign -v 4 unsigned.apk aligned.apk
+
+      - name: Tanda Tangan (Signing)
         run: |
-          # 1. Install zipalign (biasanya sudah ada di build-tools)
-          sudo apt-get install -y zipalign
-          
-          # 2. Rapiin APK (Zipalign) -> INI KUNCINYA
-          zipalign -v 4 unsigned.apk aligned.apk
-          
-          # 3. Buat Keystore (kalau belum ada di step sebelumnya)
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          
-          # 4. Sign APK yang sudah rapi (aligned.apk)
-          apksigner sign --ks debug.keystore --ks-pass pass:android --out GCam_Note13_Sultan_Final.apk aligned.apk
+          apksigner sign --ks debug.keystore --ks-pass pass:android --out hasil_sultan.apk aligned.apk
 
       - name: Simpan Hasil Jadi
         uses: actions/upload-artifact@v4
         with:
-          name: Hasil-Mod-Sultan
-          path: GCam_Note13_Sultan.apk
-          
+          name: GCam-Sultan-Note13
+          path: hasil_sultan.apk
