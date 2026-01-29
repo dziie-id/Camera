@@ -1,7 +1,7 @@
 name: Build Camera Wrapper
 
 on:
-  workflow_dispatch: # Biar bisa diklik manual dari HP
+  workflow_dispatch: 
     inputs:
       package_name:
         description: 'Nama Paket (ID)'
@@ -29,13 +29,19 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # Kita pakai gradle bawaan runner, nggak usah chmod gradlew
+      # Ini langkah sakti buat otomatisasi Gradle tanpa file gradlew manual
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5 # Kita paksa pake versi 8.5
+
       - name: Build with Gradle
         run: |
           gradle assembleDebug \
             -PcustomPackageName=${{ github.event.inputs.package_name }} \
             -PcustomVersionName=${{ github.event.inputs.version_name }} \
             -PcustomVersionCode=${{ github.event.inputs.version_code }}
+
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
