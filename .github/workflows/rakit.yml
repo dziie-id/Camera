@@ -1,4 +1,4 @@
-name: Rakit CameraGo Sapphire Auto
+name: Rakit & Auto Backup Base
 on:
   workflow_dispatch:
 
@@ -8,36 +8,44 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Alat
+      - name: Install Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jdk-headless apksigner zipalign python3 wget
           wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O apktool.jar
 
-      - name: Download Base Shamim Langsung ke Server
+      - name: Download & Rename Base
         run: |
-          # Link direct Shamim V7 yang lu pake tadi
+          # Server narik file Shamim
           URL="https://1-dontsharethislink.celsoazevedo.com/file/filesc/MGCLite_3.8.476835377_V7_cameralite.apk"
-          wget --user-agent="Mozilla/5.0" $URL -O base.apk
+          wget --user-agent="Mozilla/5.0" $URL -O base_shamim.apk
           
-      - name: Decompile (Anti-FC)
-        run: java -jar apktool.jar d -s base.apk -o workdir
-
-      - name: Eksekusi Tweak Sapphire
-        run: python3 sodok.py
-
-      - name: Rakit Ulang
-        run: java -jar apktool.jar b workdir --use-aapt2 -o unsigned.apk
-
-      - name: Zipalign & Ganti Nama
+      - name: Push Base ke Repo (Jaga-jaga)
         run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add base_shamim.apk
+          git commit -m "Auto Backup: Base Shamim V7 Added" || echo "File sudah ada, skip push."
+          git push
+
+      - name: Decompile & Tweak
+        run: |
+          java -jar apktool.jar d -s base.apk -o workdir
+          python3 sodok.py
+
+      - name: Rakit & Sign
+        run: |
+          java -jar apktool.jar b workdir --use-aapt2 -o unsigned.apk
           zipalign -v 4 unsigned.apk aligned.apk
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           apksigner sign --ks debug.keystore --ks-pass pass:android --out CameraGo.apk aligned.apk
 
-      - name: Upload Hasil Jadi
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CameraGo-Sapphire-Prebuilt
+          name: CameraGo-Final
           path: CameraGo.apk
+          
