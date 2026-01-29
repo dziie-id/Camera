@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
@@ -34,7 +33,6 @@ class MainActivity : AppCompatActivity() {
     private var isUltraWide = false
     private lateinit var cameraExecutor: ExecutorService
     
-    // UI References untuk update warna tombol
     private lateinit var btn07: TextView
     private lateinit var btn10: TextView
 
@@ -46,47 +44,56 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(Color.BLACK)
         }
 
-        // 1. Preview 4:3 Area
+        // 1. Preview Area (Dasar)
         val screenWidth = resources.displayMetrics.widthPixels
         val previewHeight = (screenWidth * 4) / 3
         
         viewFinder = PreviewView(this).apply {
             layoutParams = FrameLayout.LayoutParams(screenWidth, previewHeight).apply {
                 gravity = Gravity.TOP
-                topMargin = 180 // Space untuk header settings
+                topMargin = 150 
             }
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         }
         root.addView(viewFinder)
 
-        // 2. Header (Flash Button)
-        val header = FrameLayout(this).apply {
-            layoutParams = FrameLayout.LayoutParams(-1, 180)
-        }
-        val flashBtn = ImageButton(this).apply {
-            setImageResource(android.R.drawable.btn_star_big_off)
-            setColorFilter(Color.WHITE)
-            setBackgroundColor(Color.TRANSPARENT)
-            layoutParams = FrameLayout.LayoutParams(120, 120).apply {
-                gravity = Gravity.CENTER_VERTICAL or Gravity.END
-                rightMargin = 50
+        // 2. Shutter Button (Di bawah Preview)
+        val shutterContainer = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(220, 220).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = 150
             }
-            setOnClickListener { toggleFlash(this) }
         }
-        header.addView(flashBtn)
-        root.addView(header)
+        val ring = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setStroke(8, Color.WHITE)
+            }
+            layoutParams = FrameLayout.LayoutParams(-1, -1)
+        }
+        val core = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.WHITE)
+            }
+            layoutParams = FrameLayout.LayoutParams(170, 170).apply { gravity = Gravity.CENTER }
+            setOnClickListener { takePhoto() }
+        }
+        shutterContainer.addView(ring)
+        shutterContainer.addView(core)
+        root.addView(shutterContainer)
 
-        // 3. Floating Lens Selector (Pills Style) - 100% Mirip Ref
+        // 3. Floating Lens Selector (HARUS DI TULIS TERAKHIR BIAR DI ATAS PREVIEW)
         val lensPill = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(10, 8, 10, 8)
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#99000000")) // Dark transparan
+                setColor(Color.parseColor("#99000000"))
                 cornerRadius = 100f
             }
             layoutParams = FrameLayout.LayoutParams(-2, -2).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                bottomMargin = 480
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                topMargin = previewHeight - 50 // Pas melayang di batas bawah preview
             }
         }
 
@@ -96,44 +103,19 @@ class MainActivity : AppCompatActivity() {
         lensPill.addView(btn10)
         root.addView(lensPill)
 
-        // 4. Shutter Area (Ring & Core)
-        val shutterContainer = FrameLayout(this).apply {
-            layoutParams = FrameLayout.LayoutParams(230, 230).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                bottomMargin = 120
+        // 4. Flash Button (Atas)
+        val flashBtn = ImageButton(this).apply {
+            setImageResource(android.R.drawable.ic_menu_compass)
+            setColorFilter(Color.WHITE)
+            setBackgroundColor(Color.TRANSPARENT)
+            layoutParams = FrameLayout.LayoutParams(120, 120).apply {
+                gravity = Gravity.TOP or Gravity.END
+                topMargin = 30
+                rightMargin = 40
             }
+            setOnClickListener { toggleFlash(this) }
         }
-        val ring = View(this).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setStroke(6, Color.WHITE)
-            }
-            layoutParams = FrameLayout.LayoutParams(-1, -1)
-        }
-        val core = View(this).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.WHITE)
-            }
-            layoutParams = FrameLayout.LayoutParams(180, 180).apply { gravity = Gravity.CENTER }
-            setOnClickListener { takePhoto() }
-        }
-        shutterContainer.addView(ring)
-        shutterContainer.addView(core)
-        root.addView(shutterContainer)
-
-        // 5. Mode Indicator (Teks "Foto")
-        val modeText = TextView(this).apply {
-            text = "FOTO"
-            setTextColor(Color.WHITE)
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-            layoutParams = FrameLayout.LayoutParams(-2, -2).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                bottomMargin = 40
-            }
-        }
-        root.addView(modeText)
+        root.addView(flashBtn)
 
         setContentView(root)
         updateLensColors()
@@ -147,8 +129,8 @@ class MainActivity : AppCompatActivity() {
     private fun createLensBtn(txt: String, isWide: Boolean): TextView {
         return TextView(this).apply {
             text = txt
-            textSize = 13f
-            setPadding(40, 18, 40, 18)
+            textSize = 12f
+            setPadding(35, 15, 35, 15)
             gravity = Gravity.CENTER
             setOnClickListener {
                 if (isUltraWide != isWide) {
@@ -162,11 +144,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateLensColors() {
         val activeBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#FF00D1D1")) // Warna Toska/Teal
+            setColor(Color.parseColor("#FF00D1D1"))
             cornerRadius = 100f
         }
-        val transBg = Color.TRANSPARENT
-
         if (isUltraWide) {
             btn07.background = activeBg
             btn07.setTextColor(Color.BLACK)
@@ -207,10 +187,14 @@ class MainActivity : AppCompatActivity() {
                 .setResolutionSelector(resSelector)
                 .build()
 
-            // Fix Aux Lens Detection
+            // Logic deteksi lensa Aux khusus Redmi (Lensa ID 2 atau 3)
             val cameraSelector = if (isUltraWide) {
                 CameraSelector.Builder().addCameraFilter { cameraInfos ->
-                    cameraInfos.filter { it.toString().contains("id: 2") || it.toString().contains("id: 1") || !it.toString().contains("id: 0") }
+                    val filtered = cameraInfos.filter { 
+                        val s = it.toString().lowercase()
+                        s.contains("id: 2") || s.contains("back 1") || s.contains("id: 1")
+                    }
+                    if (filtered.isNotEmpty()) filtered else cameraInfos.filter { !it.toString().contains("id: 0") }
                 }.build()
             } else {
                 CameraSelector.DEFAULT_BACK_CAMERA
@@ -221,6 +205,7 @@ class MainActivity : AppCompatActivity() {
                 cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture)
             } catch (e: Exception) {
                 cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture)
+                Toast.makeText(this, "Lensa tidak didukung ROM ini", Toast.LENGTH_SHORT).show()
             }
         }, ContextCompat.getMainExecutor(this))
     }
