@@ -21,11 +21,9 @@ android {
     compileSdk 33
 
     defaultConfig {
-        applicationId appPackageId
-        minSdk 26
-        targetSdk 33
-        versionCode appVersionCode
-        versionName appVersionName
+        applicationId System.getenv("APP_ID") ?: "org.lineageos.aperture"
+        versionCode (System.getenv("VERSION_CODE") ?: "36").toInteger()
+        versionName System.getenv("VERSION_NAME") ?: "16"
     }
 
     buildTypes {
