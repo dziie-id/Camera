@@ -1,8 +1,6 @@
 name: Rakit GCam Sultan Manual
 on:
-  workflow_dispatch: # INI BIAR TOMBOL ACTION MUNCUL
-  push:
-    branches: [ main ]
+  workflow_dispatch: # HANYA JALAN KALAU DIKLIK MANUAL
 
 jobs:
   build:
@@ -10,28 +8,24 @@ jobs:
     steps:
       - name: Ambil Script
         uses: actions/checkout@v4
-        
+
       - name: Install Java dan Alat
         run: |
           sudo apt-get update
-          # Install Java, Apksigner, dan Python saja
           sudo apt-get install -y openjdk-17-jdk-headless apksigner python3 wget
           
-          # Pakai aapt2 bawaan Android SDK yang sudah ada di komputer GitHub
-          # Kita bikin "shortcut" (alias) biar Apktool bisa nemu
-          sudo ln -s ${ANDROID_SDK_ROOT}/build-tools/34.0.0/aapt2 /usr/local/bin/aapt2
+          # Ambil aapt2 dari Android SDK bawaan GitHub
+          sudo ln -sf ${ANDROID_SDK_ROOT}/build-tools/34.0.0/aapt2 /usr/local/bin/aapt2
           
-          # Download Apktool
-          wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
-          
+          # Download Apktool v2.9.3 dari GitHub (Link Resmi & Stabil)
+          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O apktool.jar
 
       - name: Download APK Bahan
         run: |
-          # GANTI LINK DI BAWAH INI PAKE LINK APK GCAM GO LU!
-          # Contoh: wget "https://file.io/asdf123" -O base.apk
-          wget "https://github.com/Drpto/packages_apps_prebuilt-camera/raw/refs/heads/14/GCamGOPrebuilt.apk" -O base.apk
+          # GANTI LINK DI BAWAH PAKE LINK APK LU (Pake direct link!)
+          wget "https://github.com/Evolution-X-AOSP/packages_apps_GCamGOPrebuilt/raw/refs/heads/udc/GCamGOPrebuilt-V3_8.apk" -O base.apk
 
-      - name: Bongkar APK
+      - name: Proses Decompile
         run: java -jar apktool.jar d base.apk -o workdir
 
       - name: Eksekusi Script Sodok
@@ -45,8 +39,9 @@ jobs:
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           apksigner sign --ks debug.keystore --ks-pass pass:android --out GCam_Note13_Sultan.apk unsigned.apk
 
-      - name: Simpan Hasil
+      - name: Simpan Hasil Jadi
         uses: actions/upload-artifact@v4
         with:
           name: Hasil-Mod-Sultan
           path: GCam_Note13_Sultan.apk
+          
