@@ -1,10 +1,10 @@
-name: Build Camera Wrapper (Manual)
+name: Build Camera Wrapper
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Biar bisa diklik manual dari HP
     inputs:
-      package_id:
-        description: 'Nama Paket'
+      package_name:
+        description: 'Nama Paket (ID)'
         required: true
         default: 'org.lineageos.aperture'
       version_name:
@@ -23,30 +23,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 11
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 7.5 # Kunci di versi ini
+      - name: Grant Execute Permission
+        run: chmod +x gradlew
 
-      - name: Inject Custom Config
+      - name: Build with Custom Config
         run: |
-          sed -i "s/def appPackageId = .*/def appPackageId = \"${{ github.event.inputs.package_id }}\"/g" app/build.gradle
-          sed -i "s/def appVersionName = .*/def appVersionName = \"${{ github.event.inputs.version_name }}\"/g" app/build.gradle
-          sed -i "s/def appVersionCode = .*/def appVersionCode = ${{ github.event.inputs.version_code }}/g" app/build.gradle
-          sed -i "s/package=\".*\"/package=\"${{ github.event.inputs.package_id }}\"/g" app/src/main/AndroidManifest.xml
-
-      - name: Build with Gradle
-        run: gradle :app:assembleDebug --warning-mode none
+          ./gradlew assembleDebug \
+            -PcustomPackageName=${{ github.event.inputs.package_name }} \
+            -PcustomVersionName=${{ github.event.inputs.version_name }} \
+            -PcustomVersionCode=${{ github.event.inputs.version_code }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Camera-Wrapper
+          name: Camera-Wrapper-${{ github.event.inputs.package_name }}
           path: app/build/outputs/apk/debug/*.apk
           
