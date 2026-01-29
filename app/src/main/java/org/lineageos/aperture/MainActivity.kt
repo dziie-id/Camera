@@ -27,48 +27,35 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // TANGKAP ERROR (LOGCAT MANUAL)
+        // --- CRASH CATCHER LOGIC ---
         Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
             val sw = StringWriter()
             throwable.printStackTrace(PrintWriter(sw))
-            val pref = getSharedPreferences("DEBUG_LOG", Context.MODE_PRIVATE)
-            pref.edit().putString("last_crash", sw.toString()).apply()
+            getSharedPreferences("DEBUG", Context.MODE_PRIVATE).edit()
+                .putString("last_error", sw.toString()).apply()
             android.os.Process.killProcess(android.os.Process.myPid())
         }
 
-        // TAMPILKAN DIALOG JIKA ADA CRASH
-        val pref = getSharedPreferences("DEBUG_LOG", Context.MODE_PRIVATE)
-        val logs = pref.getString("last_crash", null)
-        if (logs != null) {
-            val tv = TextView(this).apply {
-                text = logs
-                setTextColor(Color.RED)
-                setPadding(40, 40, 40, 40)
-                textSize = 10f
-            }
-            val scroll = ScrollView(this).apply { addView(tv) }
-            
-            AlertDialog.Builder(this)
-                .setTitle("Screenshot Error Ini Bang!")
-                .setView(scroll)
-                .setPositiveButton("Hapus & Lanjut") { _, _ ->
-                    pref.edit().remove("last_crash").apply()
-                }
-                .show()
+        // Tampilkan error jika ada crash sebelumnya
+        val lastError = getSharedPreferences("DEBUG", Context.MODE_PRIVATE).getString("last_error", null)
+        if (lastError != null) {
+            showErrorDialog(lastError)
+            getSharedPreferences("DEBUG", Context.MODE_PRIVATE).edit().remove("last_error").apply()
         }
 
-        // UI DASAR
+        // --- UI SETUP ---
         val root = FrameLayout(this)
         viewFinder = PreviewView(this)
         root.addView(viewFinder)
-        
-        val statusText = TextView(this).apply {
-            text = "Kamera Siap..."
-            setTextColor(Color.WHITE)
-            layoutParams = FrameLayout.LayoutParams(-2, -2).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL }
-        }
-        root.addView(statusText)
 
+        val infoTxt = TextView(this).apply {
+            text = "Kamera A16 Pro"
+            setTextColor(Color.WHITE)
+            setPadding(20, 100, 20, 20)
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+        }
+        root.addView(infoTxt)
+        
         setContentView(root)
 
         if (allPermissionsGranted()) {
@@ -76,6 +63,18 @@ class MainActivity : AppCompatActivity() {
         } else {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 10)
         }
+    }
+
+    private fun showErrorDialog(msg: String) {
+        val tv = TextView(this).apply {
+            text = "SCREENSHOT LOG INI:\n\n$msg"
+            setTextColor(Color.RED)
+            textSize = 10f
+            setPadding(40, 40, 40, 40)
+        }
+        val scroll = ScrollView(this).apply { addView(tv) }
+        AlertDialog.Builder(this).setTitle("Crash Detected").setView(scroll)
+            .setPositiveButton("OK") { d, _ -> d.dismiss() }.show()
     }
 
     private fun startCamera() {
@@ -89,16 +88,16 @@ class MainActivity : AppCompatActivity() {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview)
             } catch (e: Exception) {
-                // Jangan crash, tampilin error di layar aja
-                Toast(e.stackTraceToString())
+                showErrorDialog(e.stackTraceToString())
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun Toast(msg: String) {
-        android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_LONG).show()
-    }
-
     private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(
         baseContext, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+    override fun onRequestPermissionsResult(rc: Int, p: Array<out String>, g: IntArray) {
+        super.onRequestPermissionsResult(rc, p, g)
+        if (rc == 10 && allPermissionsGranted()) startCamera()
+    }
 }
