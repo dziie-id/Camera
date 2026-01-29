@@ -1,102 +1,77 @@
-name: GCam Go Super Patcher
+name: GCam Go Clone & Patch
 on:
   workflow_dispatch:
     inputs:
       mod_name:
-        description: 'Kasih Nama Mod Lu'
+        description: 'Nama Mod Lu'
         required: true
-        default: 'GCam Go Aux Mod'
+        default: 'GCam Go Drpto Mod'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout Your Repo
         uses: actions/checkout@v4
 
-      - name: Setup Environment
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'zulu'
-
-      - name: Install Tooling
+      - name: Setup Tools
         run: |
-          sudo apt-get update && sudo apt-get install -y wget python3
-          mkdir -p bin
+          sudo apt-get update
+          mkdir -p bin input output
           wget https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar -O bin/apktool.jar
           echo "java -jar $GITHUB_WORKSPACE/bin/apktool.jar \$@" > bin/apktool
           chmod +x bin/apktool
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
 
-      - name: Get APK (Upload or Download)
+      - name: Clone Drpto Repo (Narik APK)
         run: |
-          mkdir -p input
-          # Cek kalau di folder input kaga ada APK, kita tarik dari sumber cadangan
-          if [ -z "$(ls -A input/*.apk 2>/dev/null)" ]; then
-            echo "Folder input kosong, narik dari mirror GitHub..."
-            wget -O input/base.apk "https://github.com/ShamimModified/GCamGo/raw/main/GCamGo_3.8.47_STABLE_V1.apk"
-          else
-            echo "APK ketemu di folder input, lanjut..."
-          fi
+          # Kita clone reponya tipis-tipis aja (depth 1) biar gak lama
+          git clone --depth 1 https://github.com/Drpto/packages_apps_prebuilt-camera.git drpto_repo
+          # Cari file APK di dalem folder GoogleCameraGo (biasanya lokasinya di situ)
+          find drpto_repo -name "*.apk" -exec cp {} input/base.apk \;
+          echo "APK berhasil diculik dari repo Drpto!"
 
-      - name: Decompile
+      - name: Decompile & Patching
         run: |
-          # Ambil 1 file APK yang ada di folder input
-          APK_FILE=$(find input -name "*.apk" | head -n 1)
-          echo "Decompiling $APK_FILE..."
-          apktool d "$APK_FILE" -o workdir
-
-      - name: Super Patching (Python)
-        run: |
+          apktool d input/base.apk -o workdir
           cat << 'EOF' > patcher.py
-          import os
-          import re
-
-          MOD_NAME = "${{ github.event.inputs.mod_name }}"
-
+          import os, re
           def patch():
-              # 1. Sodok ID Kamera (Aux Support)
-              # Kita cari limit ID kamera di smali
-              for root, dirs, files in os.walk("workdir/smali"):
-                  for file in files:
-                      if file.endswith(".smali"):
-                          path = os.path.join(root, file)
-                          with open(path, "r", encoding="utf-8") as f:
-                              content = f.read()
-                          
-                          # Patching limit 0x2 jadi 0x6 (biar support banyak lensa)
-                          if "const/4 v0, 0x2" in content:
-                              content = content.replace("const/4 v0, 0x2", "const/4 v0, 0x6")
-                              with open(path, "w", encoding="utf-8") as f:
-                                  f.write(content)
-
-              # 2. Ganti Nama Aplikasi
-              string_path = "workdir/res/values/strings.xml"
-              if os.path.exists(string_path):
-                  with open(string_path, "r", encoding="utf-8") as f:
-                      content = f.read()
-                  content = re.sub(r'(<string name="app_name">)(.*?)(</string>)', r'\1' + MOD_NAME + r'\3', content)
-                  with open(string_path, "w", encoding="utf-8") as f:
-                      f.write(content)
-              
+              # Sodok Aux di semua smali
+              for i in range(1, 12):
+                  s_dir = f"workdir/smali_classes{i}" if i > 1 else "workdir/smali"
+                  if not os.path.exists(s_dir): continue
+                  for root, _, files in os.walk(s_dir):
+                      for file in files:
+                          if file.endswith(".smali"):
+                              p = os.path.join(root, file)
+                              with open(p, "r", encoding="utf-8") as f:
+                                  c = f.read()
+                              if "const/4 v0, 0x2" in c:
+                                  with open(p, "w", encoding="utf-8") as f:
+                                      f.write(c.replace("const/4 v0, 0x2", "const/4 v0, 0x6"))
+              # Ganti Nama
+              str_p = "workdir/res/values/strings.xml"
+              if os.path.exists(str_p):
+                  with open(str_p, "r", encoding="utf-8") as f:
+                      d = f.read()
+                  d = re.sub(r'(<string name="app_name">)(.*?)(</string>)', r'\1${{ github.event.inputs.mod_name }}\3', d)
+                  with open(str_p, "w", encoding="utf-8") as f:
+                      f.write(d)
           patch()
           EOF
           python3 patcher.py
 
-      - name: Rebuild APK
-        run: apktool b workdir -o patched_unsigned.apk
-
-      - name: Signing APK
+      - name: Rebuild & Sign
         run: |
+          apktool b workdir -o output/unsigned.apk
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore debug.keystore -storepass android patched_unsigned.apk androiddebugkey
-          mkdir -p output
-          mv patched_unsigned.apk output/GCamGo_Aux_Final.apk
+          jarsigner -keystore debug.keystore -storepass android output/unsigned.apk androiddebugkey
+          mv output/unsigned.apk output/GCamGo_Drpto_Patched.apk
 
-      - name: Upload Ke Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: GCam-Go-Modified-Project
-          path: output/GCamGo_Aux_Final.apk
+          name: GCamGo-Final
+          path: output/GCamGo_Drpto_Patched.apk
           
