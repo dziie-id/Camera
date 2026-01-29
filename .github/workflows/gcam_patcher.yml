@@ -1,17 +1,17 @@
-name: GCam Go Clone & Patch
+name: GCam Go Sultan Ultimate
 on:
   workflow_dispatch:
     inputs:
       mod_name:
         description: 'Nama Mod Lu'
         required: true
-        default: 'GCam Go Drpto Mod'
+        default: 'GCam Go Sultan Pro'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Your Repo
+      - name: Checkout Repo
         uses: actions/checkout@v4
 
       - name: Setup Tools
@@ -23,22 +23,36 @@ jobs:
           chmod +x bin/apktool
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
 
-      - name: Clone Drpto Repo (Narik APK)
+      - name: Curi APK Base
         run: |
-          # Kita clone reponya tipis-tipis aja (depth 1) biar gak lama
+          # Ambil dari repo Drpto yang tadi lu temuin
           git clone --depth 1 https://github.com/Drpto/packages_apps_prebuilt-camera.git drpto_repo
-          # Cari file APK di dalem folder GoogleCameraGo (biasanya lokasinya di situ)
           find drpto_repo -name "*.apk" -exec cp {} input/base.apk \;
-          echo "APK berhasil diculik dari repo Drpto!"
+          echo "APK diculik!"
 
-      - name: Decompile & Patching
+      - name: Decompile
+        run: apktool d input/base.apk -o workdir
+
+      - name: Modding & Fixer (Python Power)
         run: |
-          apktool d input/base.apk -o workdir
           cat << 'EOF' > patcher.py
           import os, re
-          def patch():
-              # Sodok Aux di semua smali
-              for i in range(1, 12):
+
+          def ultimate_patch():
+              # 1. FIX Styles Error (Dimension -1)
+              styles_paths = ["workdir/res/values/styles.xml", "workdir/res/values-v31/styles.xml"]
+              for sp in styles_paths:
+                  if os.path.exists(sp):
+                      print(f"Fixing {sp}...")
+                      with open(sp, "r", encoding="utf-8") as f:
+                          data = f.read()
+                      # Ganti dimension -1 yang ilegal jadi wrap_content
+                      data = data.replace('>-1</item>', '>wrap_content</item>')
+                      with open(sp, "w", encoding="utf-8") as f:
+                          f.write(data)
+
+              # 2. Sodok Aux & Kualitas Foto (Smali)
+              for i in range(1, 15):
                   s_dir = f"workdir/smali_classes{i}" if i > 1 else "workdir/smali"
                   if not os.path.exists(s_dir): continue
                   for root, _, files in os.walk(s_dir):
@@ -47,31 +61,47 @@ jobs:
                               p = os.path.join(root, file)
                               with open(p, "r", encoding="utf-8") as f:
                                   c = f.read()
+                              
+                              # Patch Aux (Limit 2 -> 8)
                               if "const/4 v0, 0x2" in c:
-                                  with open(p, "w", encoding="utf-8") as f:
-                                      f.write(c.replace("const/4 v0, 0x2", "const/4 v0, 0x6"))
-              # Ganti Nama
+                                  c = c.replace("const/4 v0, 0x2", "const/4 v0, 0x8")
+                              
+                              # Patch Jpeg Quality (95 atau 90 -> 100)
+                              if "const/16 v0, 0x5a" in c: # 90
+                                  c = c.replace("const/16 v0, 0x5a", "const/16 v0, 0x64")
+                              if "const/16 v0, 0x5f" in c: # 95
+                                  c = c.replace("const/16 v0, 0x5f", "const/16 v0, 0x64")
+                              
+                              with open(p, "w", encoding="utf-8") as f:
+                                  f.write(c)
+
+              # 3. Ganti Nama App & Buka Fitur HDR (Strings)
               str_p = "workdir/res/values/strings.xml"
               if os.path.exists(str_p):
                   with open(str_p, "r", encoding="utf-8") as f:
                       d = f.read()
+                  # Ganti Nama
                   d = re.sub(r'(<string name="app_name">)(.*?)(</string>)', r'\1${{ github.event.inputs.mod_name }}\3', d)
+                  # Coba buka flag HDR (kalau ada)
+                  d = d.replace('name="pref_hdr_mode_key">false', 'name="pref_hdr_mode_key">true')
                   with open(str_p, "w", encoding="utf-8") as f:
                       f.write(d)
-          patch()
+
+          ultimate_patch()
           EOF
           python3 patcher.py
 
       - name: Rebuild & Sign
         run: |
-          apktool b workdir -o output/unsigned.apk
+          # Pakai aapt2 dan ignore-check biar gak rewel
+          apktool b workdir --use-aapt2 -o output/unsigned.apk
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           jarsigner -keystore debug.keystore -storepass android output/unsigned.apk androiddebugkey
-          mv output/unsigned.apk output/GCamGo_Drpto_Patched.apk
+          mv output/unsigned.apk output/GCamGo_Sultan_Final.apk
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: GCamGo-Final
-          path: output/GCamGo_Drpto_Patched.apk
+          name: GCam-Sultan-Package
+          path: output/GCamGo_Sultan_Final.apk
           
