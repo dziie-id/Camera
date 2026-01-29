@@ -1,6 +1,5 @@
 import os
 
-# Folder tempat smali
 path = "workdir/smali/"
 
 def ganti_kode(keyword, lama, baru):
@@ -11,26 +10,22 @@ def ganti_kode(keyword, lama, baru):
                 with open(f_path, 'r') as f:
                     data = f.read()
                 
-                if keyword in data:
-                    print(f"Sodok file: {file}")
-                    # Pake replace biar lebih agresif
+                # Cek apakah keyword ada DAN lama ada di file yang sama
+                if keyword in data and lama in data:
+                    print(f"Sodok aman di: {file}")
                     data = data.replace(lama, baru)
                     with open(f_path, 'w') as f:
                         f.write(data)
 
-# --- MULAI MODIFIKASI SULTAN ---
+# --- MODIFIKASI VERSI STABIL (ANTI-FC) ---
 
-# 1. Aktifin Fitur Dasar
+# Aktifin HDR (Biasanya paling aman)
 ganti_kode("isHdrSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
+
+# Aktifin Night Mode
 ganti_kode("isNightModeSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
-ganti_kode("isPortraitSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
 
-# 2. AKTIFIN AUX (Lensa Wide/Macro)
-# Kita cari method yang ngecek jumlah kamera dan kita paksa jadi 'true'
+# Aktifin AUX (Pake keyword yang lebih spesifik buat GCam Go 3.8)
 ganti_kode("isAuxiliaryCardsSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
-ganti_kode("isMultipleCamerasSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
 
-# 3. Bypass Camera ID (Biar dia gak cuma baca kamera utama)
-ganti_kode("isWideAngleSupported", "const/4 v0, 0x0", "const/4 v0, 0x1")
-
-print("Modifikasi AUX & Fitur Selesai bray!")
+print("Modifikasi Halus Selesai!")
