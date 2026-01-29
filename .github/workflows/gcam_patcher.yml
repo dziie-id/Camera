@@ -1,16 +1,16 @@
 name: GCam Go Aux Patcher
 on:
-  workflow_dispatch: # Biar bisa lu klik "Run" manual dari HP
+  workflow_dispatch:
 
 jobs:
   patch_and_build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Update ke v4
 
       - name: Setup Java & Python
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4 # Update ke v4
         with:
           java-version: '17'
           distribution: 'zulu'
@@ -20,16 +20,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y wget
           mkdir -p bin
-          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar -O bin/apktool.jar
+          wget https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar -O bin/apktool.jar
           echo "java -jar $GITHUB_WORKSPACE/bin/apktool.jar \$@" > bin/apktool
           chmod +x bin/apktool
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
 
       - name: Download GCam Go Basis
         run: |
-          # Kita pake versi 3.8.47 yang stabil buat ditarik via wget
-          # Ganti URL ini kalau lu punya link direct APK lain
           mkdir -p input
+          # Link Greatness 3.8.47
           wget -O input/base_gcam.apk "https://www.celsoazevedo.com/files/android/google-camera/f/changelog1530/GCamGo_3.8.47_Greatness_221115.apk"
 
       - name: Decompile APK
@@ -39,12 +38,10 @@ jobs:
         run: |
           cat << 'EOF' > patch_script.py
           import os
-          import re
-
+          
           def modify_files():
-              # Lokasi file smali yang biasanya ngatur Camera ID di GCam Go
-              # Kita inject ID 2, 3, dan 4 biar kebaca
               target_dir = "workdir/smali"
+              print("Sodok-menyodok dimulai...")
               
               for root, dirs, files in os.walk(target_dir):
                   for file in files:
@@ -53,29 +50,30 @@ jobs:
                           with open(path, "r") as f:
                               content = f.read()
                           
-                          # Sodok logika: Ubah limit ID kamera dari 2 (0,1) jadi 5 (0,1,2,3,4)
+                          # Logic: maksa limit ID kamera jadi 5 (support sampai ID 4)
                           if "const/4 v0, 0x2" in content:
-                              new_content = content.replace("const/4 v0, 0x2", "const/4 v0, 0x5")
+                              content = content.replace("const/4 v0, 0x2", "const/4 v0, 0x5")
                               with open(path, "w") as f:
-                                  f.write(new_content)
-              
-              print("Patching logic Aux selesai...")
-
+                                  f.write(content)
+          
           modify_files()
           EOF
           python3 patch_script.py
 
       - name: Rebuild and Sign APK
         run: |
-          apktool b workdir -o output/GCamGo_Aux_Patched.apk
-          # Generate debug key buat tanda tangan APK biar bisa diinstall
+          apktool b workdir -o output_unsigned.apk
+          # Generate debug key
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          
-          # Pakai jarsigner (bawaan JDK)
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore debug.keystore -storepass android output/GCamGo_Aux_Patched.apk androiddebugkey
+          # Sign APK
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore debug.keystore -storepass android output_unsigned.apk androiddebugkey
+          mkdir -p final_apk
+          mv output_unsigned.apk final_apk/GCamGo_Aux_Patched_V1.apk
 
-      - name: Upload APK ke Release/Artifact
-        uses: actions/upload-artifact@v3
+      - name: Upload APK ke Artifact
+        uses: actions/upload-artifact@v4 # Ini yang versi baru bray
         with:
-          name: GCam-Go-Aux-Result
-          path: output/GCamGo_Aux_Patched.apk
+          name: GCam-Go-Mod-Hasil-Sodokan
+          path: final_apk/GCamGo_Aux_Patched_V1.apk
+          retention-days: 1 # Biar gak menuhin storage repo lu
+          
