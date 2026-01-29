@@ -34,10 +34,19 @@ jobs:
       - name: Rakit Ulang
         run: java -jar apktool.jar b workdir --use-aapt2 -o unsigned.apk
 
-      - name: Tanda Tangan (Signing)
+      - name: Optimasi dan Tanda Tangan
         run: |
+          # 1. Install zipalign (biasanya sudah ada di build-tools)
+          sudo apt-get install -y zipalign
+          
+          # 2. Rapiin APK (Zipalign) -> INI KUNCINYA
+          zipalign -v 4 unsigned.apk aligned.apk
+          
+          # 3. Buat Keystore (kalau belum ada di step sebelumnya)
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          apksigner sign --ks debug.keystore --ks-pass pass:android --out GCam_Note13_Sultan.apk unsigned.apk
+          
+          # 4. Sign APK yang sudah rapi (aligned.apk)
+          apksigner sign --ks debug.keystore --ks-pass pass:android --out GCam_Note13_Sultan_Final.apk aligned.apk
 
       - name: Simpan Hasil Jadi
         uses: actions/upload-artifact@v4
