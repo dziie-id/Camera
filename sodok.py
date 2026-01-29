@@ -1,35 +1,41 @@
 import os
+import re
 
 def sodok_shamim():
-    # Daftar file yang bakal kita paksa aktif
-    targets = [
-        "workdir/res/values/bools.xml",
-        "workdir/res/values/integers.xml",
-        "workdir/res/values/strings.xml"
-    ]
+    # Daftar folder values (v31, v33, dll) biar kena semua
+    res_path = "workdir/res/"
+    
+    target_keys = {
+        "is_hdr_supported": "true",
+        "is_night_mode_supported": "true",
+        "is_aux_supported": "true",
+        "is_multiple_cameras_supported": "true",
+        "is_wide_angle_supported": "true",
+        "back_camera_number": "3",
+        "aux_camera_id": "2" # Lensa Wide Note 13 lu
+    }
 
-    for path in targets:
-        if not os.path.exists(path): continue
-        with open(path, 'r') as f:
-            data = f.read()
-        
-        # Aktifin semua saklar dasar
-        data = data.replace('name="is_hdr_supported">false', 'name="is_hdr_supported">true')
-        data = data.replace('name="is_aux_supported">false', 'name="is_aux_supported">true')
-        data = data.replace('name="is_wide_angle_supported">false', 'name="is_wide_angle_supported">true')
-        data = data.replace('name="is_multiple_cameras_supported">false', 'name="is_multiple_cameras_supported">true')
-
-        # Setting khusus ID Kamera sesuai log Note 13 lu
-        if "integers.xml" in path:
-            # Kita set back_camera ke 3 karena lu punya Main, Wide, Macro
-            data = data.replace('name="back_camera_number">1', 'name="back_camera_number">3')
-            # Paksa AUX ke ID 2 (Wide) atau ID 4 (Logical)
-            data = data.replace('name="aux_camera_id">0', 'name="aux_camera_id">2')
-
-        with open(path, 'w') as f:
-            f.write(data)
-        print(f"[+] Berhasil Tweak: {path}")
+    print("--- Memulai Tweak Base Shamim ---")
+    
+    for root, dirs, files in os.walk(res_path):
+        for file in files:
+            if file in ["bools.xml", "integers.xml"]:
+                file_path = os.path.join(root, file)
+                with open(file_path, 'r') as f:
+                    content = f.read()
+                
+                orig = content
+                for key, val in target_keys.items():
+                    # Sodok Boolean
+                    content = content.replace(f'name="{key}">false', f'name="{key}">true')
+                    # Sodok Integer
+                    if "camera_id" in key or "camera_number" in key:
+                        content = re.sub(rf'name="{key}">\d+</integer>', f'name="{key}">{val}</integer>', content)
+                
+                if content != orig:
+                    with open(file_path, 'w') as f:
+                        f.write(content)
+                    print(f"[+] Modified: {file_path}")
 
 if __name__ == "__main__":
     sodok_shamim()
-    
