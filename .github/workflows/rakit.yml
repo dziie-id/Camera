@@ -1,37 +1,44 @@
-name: Rakit GCam Sultan
-on: [push]
+name: Rakit GCam Sultan Manual
+on:
+  workflow_dispatch: # INI BIAR TOMBOL ACTION MUNCUL
+  push:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Ambil Script
+        uses: actions/checkout@v4
 
-      - name: Install Tools
+      - name: Install Java dan Alat
         run: |
           sudo apt-get update
-          sudo apt-get install -y aapt2 apksigner python3
+          sudo apt-get install -y aapt2 apksigner python3 wget
           wget https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O apktool.jar
 
-      - name: Ambil Bahan (Download APK)
+      - name: Download APK Bahan
         run: |
-          # Ganti LINK_APK_ASLI di bawah pake link download GCam Go lu
+          # GANTI LINK DI BAWAH INI PAKE LINK APK GCAM GO LU!
+          # Contoh: wget "https://file.io/asdf123" -O base.apk
           wget "https://github.com/Drpto/packages_apps_prebuilt-camera/raw/refs/heads/14/GCamGOPrebuilt.apk" -O base.apk
 
-      - name: Proses Modding
-        run: |
-          java -jar apktool.jar d base.apk -o workdir
-          python3 sodok.py
-          # Pake aapt2 murni Linux, gak bakal error 132 bray!
-          java -jar apktool.jar b workdir --use-aapt2 -o unsigned.apk
+      - name: Bongkar APK
+        run: java -jar apktool.jar d base.apk -o workdir
 
-      - name: Signing APK
+      - name: Eksekusi Script Sodok
+        run: python3 sodok.py
+
+      - name: Rakit Ulang
+        run: java -jar apktool.jar b workdir --use-aapt2 -o unsigned.apk
+
+      - name: Tanda Tangan (Signing)
         run: |
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           apksigner sign --ks debug.keystore --ks-pass pass:android --out GCam_Note13_Sultan.apk unsigned.apk
 
-      - name: Kirim Hasil ke Artifact
+      - name: Simpan Hasil
         uses: actions/upload-artifact@v4
         with:
-          name: GCam-Sultan-Selesai
+          name: Hasil-Mod-Sultan
           path: GCam_Note13_Sultan.apk
