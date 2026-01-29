@@ -31,9 +31,10 @@ ganti_bools = {
 
 integers_path = "workdir/res/values/integers.xml"
 ganti_integers = {
-    'name="back_camera_number">1': 'name="back_camera_number">3',
-    'name="aux_camera_id">0': 'name="aux_camera_id">4' # Pakai Logical ID 4 dulu
+    'name="back_camera_number">1': 'name="back_camera_number">2', # Coba 2 dulu bray
+    'name="aux_camera_id">0': 'name="aux_camera_id">2' # Paksa pake ID 2 (Wide)
 }
+
 
 # 2. Sodok Arrays (Daftar ID Kamera)
 arrays_path = "workdir/res/values/arrays.xml"
