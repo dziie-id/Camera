@@ -5,10 +5,10 @@ import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -30,6 +30,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var viewFinder: PreviewView
     private var imageCapture: ImageCapture? = null
+    private var flashMode = ImageCapture.FLASH_MODE_OFF
     private var isUltraWide = false
     private lateinit var btn07: TextView
     private lateinit var btn10: TextView
@@ -37,34 +38,64 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Root Layout
         val root = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(-1, -1)
             setBackgroundColor(Color.BLACK)
         }
 
-        // 1. PREVIEW 4:3 (Base UI)
+        // 1. PREVIEW 4:3 (Diturunin dikit biar nggak mepet status bar)
         val screenWidth = resources.displayMetrics.widthPixels
         val previewHeight = (screenWidth * 4) / 3
+        
         viewFinder = PreviewView(this).apply {
             layoutParams = FrameLayout.LayoutParams(screenWidth, previewHeight).apply {
                 gravity = Gravity.TOP
-                topMargin = 100
+                topMargin = dpToPx(50) 
             }
         }
         root.addView(viewFinder)
 
-        // 2. FLOATING LENS SELECTOR (Urutan di bawah preview agar melayang)
+        // 2. SHUTTER AREA (Dibikin pendek, tingginya cuma 180dp)
+        val bottomBarHeight = dpToPx(180)
+        val bottomArea = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(-1, bottomBarHeight).apply {
+                gravity = Gravity.BOTTOM
+            }
+            setBackgroundColor(Color.BLACK)
+        }
+        
+        val shutterRing = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setStroke(dpToPx(5), Color.WHITE)
+            }
+            layoutParams = FrameLayout.LayoutParams(dpToPx(85), dpToPx(85)).apply {
+                gravity = Gravity.CENTER
+            }
+        }
+        val shutterCore = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.WHITE)
+            }
+            layoutParams = FrameLayout.LayoutParams(dpToPx(70), dpToPx(70)).apply { gravity = Gravity.CENTER }
+            setOnClickListener { takePhoto() }
+        }
+        shutterRing.addView(shutterCore)
+        bottomArea.addView(shutterRing)
+        root.addView(bottomArea)
+
+        // 3. AUX LENS SELECTOR (Melayang di atas area Shutter)
         val lensPill = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            elevation = 20f // Biar melayang di atas segalanya
+            setPadding(8, 5, 8, 5)
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#99000000"))
+                setColor(Color.parseColor("#80000000"))
                 cornerRadius = 100f
             }
             layoutParams = FrameLayout.LayoutParams(-2, -2).apply {
-                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                topMargin = previewHeight + 30 // Melayang tepat di bawah preview
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = bottomBarHeight + dpToPx(20) // Melayang 20dp di atas bar hitam
             }
         }
 
@@ -74,27 +105,19 @@ class MainActivity : AppCompatActivity() {
         lensPill.addView(btn10)
         root.addView(lensPill)
 
-        // 3. SHUTTER BUTTON (Pixel Style)
-        val shutterRing = FrameLayout(this).apply {
-            layoutParams = FrameLayout.LayoutParams(230, 230).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                bottomMargin = 100
+        // 4. FLASH BUTTON (Tetap di atas kanan)
+        val flashBtn = ImageButton(this).apply {
+            setImageResource(android.R.drawable.ic_menu_compass)
+            setColorFilter(Color.WHITE)
+            setBackgroundColor(Color.TRANSPARENT)
+            layoutParams = FrameLayout.LayoutParams(120, 120).apply {
+                gravity = Gravity.TOP or Gravity.END
+                topMargin = dpToPx(60)
+                rightMargin = 40
             }
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setStroke(10, Color.WHITE)
-            }
+            setOnClickListener { toggleFlash(this) }
         }
-        val shutterCore = View(this).apply {
-            layoutParams = FrameLayout.LayoutParams(180, 180).apply { gravity = Gravity.CENTER }
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.WHITE)
-            }
-            setOnClickListener { takePhoto() }
-        }
-        shutterRing.addView(shutterCore)
-        root.addView(shutterRing)
+        root.addView(flashBtn)
 
         setContentView(root)
         updateLensColors()
@@ -103,12 +126,15 @@ class MainActivity : AppCompatActivity() {
         else ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 10)
     }
 
+    private fun dpToPx(dp: Int): Int = TypedValue.applyDimension(
+        TypedValue.COMPLEX_UNIT_DIP, dp.toFloat(), resources.displayMetrics).toInt()
+
     private fun createLensBtn(txt: String, wide: Boolean): TextView {
         return TextView(this).apply {
             text = txt
             setTextColor(Color.WHITE)
-            setPadding(45, 20, 45, 20)
             textSize = 14f
+            setPadding(dpToPx(18), dpToPx(10), dpToPx(18), dpToPx(10))
             setOnClickListener {
                 if (isUltraWide != wide) {
                     isUltraWide = wide
@@ -120,21 +146,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateLensColors() {
-        val activeBg = GradientDrawable().apply {
-            setColor(Color.parseColor("#FF00D1D1"))
-            cornerRadius = 100f
+        val activeColor = Color.parseColor("#FF00D1D1")
+        btn07.setTextColor(if (isUltraWide) activeColor else Color.WHITE)
+        btn10.setTextColor(if (!isUltraWide) activeColor else Color.WHITE)
+    }
+
+    private fun toggleFlash(btn: ImageButton) {
+        flashMode = when (flashMode) {
+            ImageCapture.FLASH_MODE_OFF -> ImageCapture.FLASH_MODE_ON
+            ImageCapture.FLASH_MODE_ON -> ImageCapture.FLASH_MODE_AUTO
+            else -> ImageCapture.FLASH_MODE_OFF
         }
-        if (isUltraWide) {
-            btn07.background = activeBg
-            btn07.setTextColor(Color.BLACK)
-            btn10.background = null
-            btn10.setTextColor(Color.WHITE)
-        } else {
-            btn10.background = activeBg
-            btn10.setTextColor(Color.BLACK)
-            btn07.background = null
-            btn07.setTextColor(Color.WHITE)
-        }
+        btn.setColorFilter(if (flashMode == ImageCapture.FLASH_MODE_OFF) Color.WHITE else Color.YELLOW)
+        startCamera()
     }
 
     private fun startCamera() {
@@ -150,7 +174,7 @@ class MainActivity : AppCompatActivity() {
 
             imageCapture = ImageCapture.Builder()
                 .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                .setResolutionSelector(resSelector)
+                .setFlashMode(flashMode)
                 .build()
 
             val cameraSelector = if (isUltraWide) {
@@ -170,56 +194,34 @@ class MainActivity : AppCompatActivity() {
 
     private fun takePhoto() {
         val imageCapture = imageCapture ?: return
-        
         imageCapture.takePicture(Executors.newSingleThreadExecutor(), object : ImageCapture.OnImageCapturedCallback() {
             override fun onCaptureSuccess(image: ImageProxy) {
-                val bitmap = imageProxyToBitmap(image)
+                val buffer = image.planes[0].buffer
+                val bytes = ByteArray(buffer.remaining())
+                buffer.get(bytes)
+                var bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                
+                // Fix rotasi
+                val matrix = Matrix().apply { postRotate(image.imageInfo.rotationDegrees.toFloat()) }
+                bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
                 image.close()
-                
-                // Tambahkan Watermark
-                val watermarkedBitmap = addWatermark(bitmap)
-                saveBitmapToGallery(watermarkedBitmap)
-                
-                runOnUiThread { Toast.makeText(baseContext, "Foto disimpan dengan Watermark!", Toast.LENGTH_SHORT).show() }
+
+                // Simpan
+                val name = "A16_${System.currentTimeMillis()}.jpg"
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/Camera")
+                }
+                val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                uri?.let {
+                    val stream: OutputStream? = contentResolver.openOutputStream(it)
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 98, stream!!)
+                    stream.close()
+                }
+                runOnUiThread { Toast.makeText(baseContext, "Cekrak!", Toast.LENGTH_SHORT).show() }
             }
         })
-    }
-
-    private fun imageProxyToBitmap(image: ImageProxy): Bitmap {
-        val buffer = image.planes[0].buffer
-        val bytes = ByteArray(buffer.remaining())
-        buffer.get(bytes)
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-    }
-
-    private fun addWatermark(src: Bitmap): Bitmap {
-        val result = src.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(result)
-        val paint = Paint().apply {
-            color = Color.WHITE
-            textSize = result.width / 40f
-            isAntiAlias = true
-            setShadowLayer(2f, 1f, 1f, Color.BLACK)
-        }
-        val date = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()).format(Date())
-        val text = "Captured on Android 16 Pro | $date"
-        canvas.drawText(text, 50f, result.height - 50f, paint)
-        return result
-    }
-
-    private fun saveBitmapToGallery(bitmap: Bitmap) {
-        val name = "IMG_${System.currentTimeMillis()}.jpg"
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/Camera")
-        }
-        val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-        uri?.let {
-            val stream: OutputStream? = contentResolver.openOutputStream(it)
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream!!)
-            stream.close()
-        }
     }
 
     private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(baseContext, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
