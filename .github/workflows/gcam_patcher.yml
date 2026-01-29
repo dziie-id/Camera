@@ -29,11 +29,23 @@ jobs:
           chmod +x bin/apktool
           echo "$GITHUB_WORKSPACE/bin" >> $GITHUB_PATH
 
+      - name: Get APK (Upload or Download)
+        run: |
+          mkdir -p input
+          # Cek kalau di folder input kaga ada APK, kita tarik dari sumber cadangan
+          if [ -z "$(ls -A input/*.apk 2>/dev/null)" ]; then
+            echo "Folder input kosong, narik dari mirror GitHub..."
+            wget -O input/base.apk "https://github.com/ShamimModified/GCamGo/raw/main/GCamGo_3.8.47_STABLE_V1.apk"
+          else
+            echo "APK ketemu di folder input, lanjut..."
+          fi
+
       - name: Decompile
         run: |
-          # Cari APK apapun di folder input
-          APK_PATH=$(ls input/*.apk | head -n 1)
-          apktool d "$APK_PATH" -o workdir
+          # Ambil 1 file APK yang ada di folder input
+          APK_FILE=$(find input -name "*.apk" | head -n 1)
+          echo "Decompiling $APK_FILE..."
+          apktool d "$APK_FILE" -o workdir
 
       - name: Super Patching (Python)
         run: |
@@ -45,6 +57,7 @@ jobs:
 
           def patch():
               # 1. Sodok ID Kamera (Aux Support)
+              # Kita cari limit ID kamera di smali
               for root, dirs, files in os.walk("workdir/smali"):
                   for file in files:
                       if file.endswith(".smali"):
@@ -52,26 +65,22 @@ jobs:
                           with open(path, "r", encoding="utf-8") as f:
                               content = f.read()
                           
-                          # Ubah limit ID kamera dari 2 jadi 6 (biar semua lensa kesapu)
+                          # Patching limit 0x2 jadi 0x6 (biar support banyak lensa)
                           if "const/4 v0, 0x2" in content:
                               content = content.replace("const/4 v0, 0x2", "const/4 v0, 0x6")
                               with open(path, "w", encoding="utf-8") as f:
                                   f.write(content)
 
-              # 2. Ganti Nama Aplikasi di strings.xml
+              # 2. Ganti Nama Aplikasi
               string_path = "workdir/res/values/strings.xml"
               if os.path.exists(string_path):
                   with open(string_path, "r", encoding="utf-8") as f:
                       content = f.read()
-                  # Ganti app_name
                   content = re.sub(r'(<string name="app_name">)(.*?)(</string>)', r'\1' + MOD_NAME + r'\3', content)
                   with open(string_path, "w", encoding="utf-8") as f:
                       f.write(content)
               
-              print(f"Sodokan maut selesai! Nama diubah jadi: {MOD_NAME}")
-
-          if __name__ == "__main__":
-              patch()
+          patch()
           EOF
           python3 patcher.py
 
@@ -80,9 +89,7 @@ jobs:
 
       - name: Signing APK
         run: |
-          # Bikin kunci buat tanda tangan
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          # Tanda tanganin
           jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore debug.keystore -storepass android patched_unsigned.apk androiddebugkey
           mkdir -p output
           mv patched_unsigned.apk output/GCamGo_Aux_Final.apk
@@ -90,6 +97,6 @@ jobs:
       - name: Upload Ke Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GCam-Go-Modified
+          name: GCam-Go-Modified-Project
           path: output/GCamGo_Aux_Final.apk
           
